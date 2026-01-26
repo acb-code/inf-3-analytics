@@ -67,7 +67,12 @@ Examples:
         type=str,
         default="faster-whisper",
         choices=list_engines(),
-        help="Transcription engine (default: faster-whisper)",
+        help=(
+            "Transcription engine (default: faster-whisper). "
+            "faster-whisper: Local Whisper (no API key needed). "
+            "openai: OpenAI Whisper API (requires OPENAI_API_KEY). "
+            "gemini: Google Gemini (requires GEMINI_API_KEY, timestamps approximated)."
+        ),
     )
 
     parser.add_argument(

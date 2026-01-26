@@ -120,12 +120,55 @@ outputs/
 | large-v3 | 3.1 GB | Slowest | Highest | Best accuracy |
 | turbo | 1.6 GB | Fast | High | Production (balanced) |
 
+## Cloud Transcription (Optional)
+
+In addition to the local `faster-whisper` engine, you can use cloud-based transcription services.
+
+### OpenAI Engine
+
+Uses OpenAI's Whisper API for transcription. Returns accurate word-level timestamps.
+
+```bash
+# Set API key
+export OPENAI_API_KEY=your-api-key
+
+# Install OpenAI dependency
+uv sync --extra openai
+
+# Run transcription
+uv run --env-file .env inf3-transcribe --video inspection.MOV --engine openai
+```
+
+### Gemini Engine
+
+Uses Google's Gemini API for transcription. Note: timestamps are approximated since Gemini doesn't provide native audio timestamps.
+
+```bash
+# Set API key
+export GEMINI_API_KEY=your-api-key
+
+# Install Gemini dependency
+uv sync --extra gemini
+
+# Run transcription
+uv run inf3-transcribe --video inspection.mp4 --engine gemini
+```
+
+### Cloud Engine Comparison
+
+| Engine | Timestamps | Word-level | Cost | Notes |
+|--------|------------|------------|------|-------|
+| faster-whisper | Native | Yes | Free | Requires local compute (GPU optional) |
+| openai | Native | Yes | ~$0.006/min | Requires internet, 25MB file limit |
+| gemini | Approximated | No | Variable | Requires internet, timestamps estimated |
+
 ## CLI Options
 
 ```
 usage: inf3-transcribe [-h] --video VIDEO [--out OUT] [--language LANGUAGE]
                        [--model {tiny,base,small,medium,large-v3,turbo}]
-                       [--engine {faster-whisper}] [--device {auto,cpu,cuda}]
+                       [--engine {faster-whisper,openai,gemini}]
+                       [--device {auto,cpu,cuda}]
                        [--compute-type {default,int8,float16,float32}]
                        [--no-words] [--format FORMAT] [--no-vad]
 
@@ -135,6 +178,9 @@ Options:
   --language      Language code (e.g., 'en', 'es') or auto-detect
   --model         Whisper model size (default: base)
   --engine        Transcription engine (default: faster-whisper)
+                  - faster-whisper: Local Whisper (no API key needed)
+                  - openai: OpenAI Whisper API (requires OPENAI_API_KEY)
+                  - gemini: Google Gemini (requires GEMINI_API_KEY)
   --device        Compute device: auto, cpu, cuda (default: auto)
   --compute-type  Model precision (default: auto-select)
   --no-words      Disable word-level timestamps

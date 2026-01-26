@@ -9,6 +9,8 @@ class TranscriptionEngineType(Enum):
     """Supported transcription engine types."""
 
     FASTER_WHISPER = "faster-whisper"
+    OPENAI = "openai"
+    GEMINI = "gemini"
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +158,9 @@ class Transcript:
         self,
     ) -> dict[
         str,
-        str | list[dict[str, int | float | str | list[dict[str, str | float]] | None]] | dict[str, str | float | None],
+        str
+        | list[dict[str, int | float | str | list[dict[str, str | float]] | None]]
+        | dict[str, str | float | None],
     ]:
         """Convert to dictionary for serialization."""
         return {
@@ -170,7 +174,9 @@ class Transcript:
         cls,
         data: dict[
             str,
-            str | list[dict[str, int | float | str | list[dict[str, str | float]] | None]] | dict[str, str | float | None],
+            str
+            | list[dict[str, int | float | str | list[dict[str, str | float]] | None]]
+            | dict[str, str | float | None],
         ],
     ) -> "Transcript":
         """Create Transcript from dictionary."""

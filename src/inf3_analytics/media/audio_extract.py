@@ -149,9 +149,7 @@ def extract_audio(
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        raise AudioExtractionError(
-            f"Audio extraction failed: {e.stderr or 'Unknown error'}"
-        ) from e
+        raise AudioExtractionError(f"Audio extraction failed: {e.stderr or 'Unknown error'}") from e
 
     if not output_path.exists():
         raise AudioExtractionError(f"Output file was not created: {output_path}")

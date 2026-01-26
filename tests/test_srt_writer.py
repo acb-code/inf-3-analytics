@@ -9,9 +9,7 @@ from inf3_analytics.types.transcript import Transcript
 class TestWriteSrt:
     """Tests for write_srt function."""
 
-    def test_srt_structure(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_srt_structure(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that SRT file has correct structure."""
         srt_path = tmp_output_dir / "test.srt"
         write_srt(sample_transcript, srt_path)
@@ -41,9 +39,7 @@ class TestWriteSrt:
         assert srt_path.exists()
         assert srt_path.parent.exists()
 
-    def test_timestamp_format(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_timestamp_format(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that timestamps use SRT format (comma separator)."""
         srt_path = tmp_output_dir / "test.srt"
         write_srt(sample_transcript, srt_path)
@@ -55,9 +51,7 @@ class TestWriteSrt:
         assert "00:00:02,500" in content
         assert "00:00:00.000" not in content  # Not period
 
-    def test_one_based_indexing(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_one_based_indexing(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that segment indices start at 1, not 0."""
         srt_path = tmp_output_dir / "test.srt"
         write_srt(sample_transcript, srt_path)
@@ -70,7 +64,9 @@ class TestWriteSrt:
         # Second index should be 2
         assert lines[4] == "2"
 
-    def test_utf8_encoding(self, tmp_output_dir: Path, sample_metadata: "TranscriptMetadata") -> None:
+    def test_utf8_encoding(
+        self, tmp_output_dir: Path, sample_metadata: "TranscriptMetadata"
+    ) -> None:
         """Test that SRT files are written with UTF-8 encoding."""
         from inf3_analytics.types.transcript import Segment, Transcript, TranscriptMetadata
 

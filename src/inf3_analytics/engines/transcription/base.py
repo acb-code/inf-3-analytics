@@ -44,8 +44,7 @@ class TranscriptionConfig:
         }
         if self.compute_type not in valid_compute_types:
             raise ValueError(
-                f"Invalid compute_type: {self.compute_type}. "
-                f"Must be one of {valid_compute_types}"
+                f"Invalid compute_type: {self.compute_type}. Must be one of {valid_compute_types}"
             )
 
 

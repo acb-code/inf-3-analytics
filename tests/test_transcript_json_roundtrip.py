@@ -15,9 +15,7 @@ from inf3_analytics.types.transcript import (
 class TestJsonRoundtrip:
     """Tests for JSON serialization and deserialization."""
 
-    def test_full_roundtrip(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_full_roundtrip(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that full transcript survives JSON roundtrip."""
         json_path = tmp_output_dir / "test.json"
 
@@ -27,18 +25,14 @@ class TestJsonRoundtrip:
         assert loaded.full_text == sample_transcript.full_text
         assert len(loaded.segments) == len(sample_transcript.segments)
 
-    def test_segments_preserved(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_segments_preserved(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that segment data is preserved through roundtrip."""
         json_path = tmp_output_dir / "test.json"
 
         write_json(sample_transcript, json_path)
         loaded = read_json(json_path)
 
-        for orig, loaded_seg in zip(
-            sample_transcript.segments, loaded.segments, strict=True
-        ):
+        for orig, loaded_seg in zip(sample_transcript.segments, loaded.segments, strict=True):
             assert loaded_seg.id == orig.id
             assert loaded_seg.start_s == orig.start_s
             assert loaded_seg.end_s == orig.end_s
@@ -48,9 +42,7 @@ class TestJsonRoundtrip:
             assert loaded_seg.avg_logprob == orig.avg_logprob
             assert loaded_seg.no_speech_prob == orig.no_speech_prob
 
-    def test_metadata_preserved(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_metadata_preserved(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that metadata is preserved through roundtrip."""
         json_path = tmp_output_dir / "test.json"
 
@@ -70,9 +62,7 @@ class TestJsonRoundtrip:
         assert str(loaded_meta.source_video) == str(orig_meta.source_video)
         assert str(loaded_meta.source_audio) == str(orig_meta.source_audio)
 
-    def test_words_preserved(
-        self, sample_transcript: Transcript, tmp_output_dir: Path
-    ) -> None:
+    def test_words_preserved(self, sample_transcript: Transcript, tmp_output_dir: Path) -> None:
         """Test that word-level data is preserved through roundtrip."""
         json_path = tmp_output_dir / "test.json"
 
@@ -106,9 +96,7 @@ class TestJsonRoundtrip:
         assert sample_transcript.segments[1].words is None
         assert loaded.segments[1].words is None
 
-    def test_creates_parent_directory(
-        self, sample_transcript: Transcript, tmp_path: Path
-    ) -> None:
+    def test_creates_parent_directory(self, sample_transcript: Transcript, tmp_path: Path) -> None:
         """Test that parent directories are created for JSON output."""
         json_path = tmp_path / "nested" / "dirs" / "test.json"
         assert not json_path.parent.exists()
