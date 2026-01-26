@@ -31,6 +31,14 @@ uv run inf3-transcribe --video inspection.mp4 --out outputs/run1
 
 # Specify language or model
 uv run inf3-transcribe --video inspection.mp4 --language en --model medium
+
+# Use OpenAI Whisper API
+export OPENAI_API_KEY=your-key
+uv run --extra openai inf3-transcribe --video inspection.mp4 --engine openai
+
+# Use Gemini
+export GEMINI_API_KEY=your-key
+uv run --extra gemini inf3-transcribe --video inspection.mp4 --engine gemini
 ```
 
 ## Output

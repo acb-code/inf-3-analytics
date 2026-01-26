@@ -1,6 +1,7 @@
 """Simple CLI for video-to-text transcription."""
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -66,6 +67,13 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         help="Output directory (default: ./outputs)",
     )
     parser.add_argument(
+        "--engine",
+        type=str,
+        default="local",
+        choices=["local", "openai", "gemini"],
+        help="Transcription engine: local (faster-whisper), openai, or gemini.",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="base",
@@ -104,12 +112,49 @@ def main(args: list[str] | None = None) -> int:
         print(f"Error extracting audio: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Transcribing with model: {parsed.model}")
-    model = WhisperModel(parsed.model, device="auto")
-    segments, _info = model.transcribe(str(audio_path), language=parsed.language)
+    try:
+        if parsed.engine == "local":
+            print(f"Transcribing with model: {parsed.model}")
+            model = WhisperModel(parsed.model, device="auto")
+            segments, _info = model.transcribe(str(audio_path), language=parsed.language)
+            lines = [segment.text.strip() for segment in segments if segment.text.strip()]
+            text = "\n".join(lines).strip()
+        elif parsed.engine == "openai":
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                print("Error: OPENAI_API_KEY is not set.", file=sys.stderr)
+                return 1
+            from openai import OpenAI
 
-    lines = [segment.text.strip() for segment in segments if segment.text.strip()]
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            client = OpenAI(api_key=api_key)
+            with open(audio_path, "rb") as audio_file:
+                response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                )
+            text = response.text.strip()
+        else:
+            api_key = os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                print("Error: GEMINI_API_KEY is not set.", file=sys.stderr)
+                return 1
+            import google.generativeai as genai
+
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            audio_file = genai.upload_file(audio_path)
+            response = model.generate_content(
+                [
+                    "Transcribe the audio. Return only the transcript text.",
+                    audio_file,
+                ]
+            )
+            text = response.text.strip()
+    except Exception as exc:
+        print(f"Error during transcription: {exc}", file=sys.stderr)
+        return 1
+
+    output_path.write_text(f"{text}\n", encoding="utf-8")
 
     print(f"Transcript written: {output_path}")
     return 0
