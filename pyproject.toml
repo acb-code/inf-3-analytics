@@ -19,11 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
 ]
-dependencies = [
-    "faster-whisper>=1.0.0,<2.0.0",
-    "pydantic>=2.0.0,<3.0.0",
-    "python-dotenv>=1.2.1",
-]
+dependencies = ["faster-whisper>=1.0.0,<2.0.0"]
 
 [project.optional-dependencies]
 dev = [
@@ -31,12 +27,6 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
-]
-openai = ["openai>=1.0.0,<2.0.0"]
-gemini = ["google-generativeai>=0.5.0,<1.0.0"]
-cloud = [
-    "openai>=1.0.0,<2.0.0",
-    "google-generativeai>=0.5.0,<1.0.0",
 ]
 
 [project.scripts]
@@ -83,14 +73,6 @@ warn_unused_configs = true
 
 [[tool.mypy.overrides]]
 module = ["faster_whisper.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["openai.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["google.generativeai.*", "google.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

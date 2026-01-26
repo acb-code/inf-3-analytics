@@ -1,25 +1,11 @@
 # inf3-analytics
 
-Infrastructure inspection video analytics pipeline with synchronized timestamps.
+Minimal video-to-text transcription pipeline built on `faster-whisper`.
 
 ## Prerequisites
 
 - Python 3.11+
 - [FFmpeg](https://ffmpeg.org/) (required for audio extraction)
-- CUDA-compatible GPU (optional, for faster transcription)
-
-### Installing FFmpeg
-
-```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Windows
-# Download from https://ffmpeg.org/download.html
-```
 
 ## Installation
 
@@ -28,16 +14,13 @@ brew install ffmpeg
 git clone <repository-url>
 cd inf-3-analytics
 
-# Install with uv (recommended)
+# Install dependencies (uv or pip)
 uv sync
-
-# Or install with pip
+# or
 pip install -e ".[dev]"
 ```
 
 ## Quick Start
-
-### CLI Usage
 
 ```bash
 # Basic transcription
@@ -46,146 +29,18 @@ uv run inf3-transcribe --video inspection.mp4
 # Specify output directory
 uv run inf3-transcribe --video inspection.mp4 --out outputs/run1
 
-# With GPU acceleration and larger model
-uv run inf3-transcribe --video inspection.mp4 --model large-v3 --device cuda
-
-# Specify language (skip auto-detection)
-uv run inf3-transcribe --video inspection.mp4 --language en
-
-# Select output formats
-uv run inf3-transcribe --video inspection.mp4 --format json,srt
+# Specify language or model
+uv run inf3-transcribe --video inspection.mp4 --language en --model medium
 ```
 
-### Python API
+## Output
 
-```python
-from pathlib import Path
-from inf3_analytics.media import extract_audio
-from inf3_analytics.engines.transcription import FasterWhisperEngine, TranscriptionConfig
-from inf3_analytics.io import write_json, write_srt
-
-# Extract audio from video
-video_path = Path("inspection.mp4")
-audio_info = extract_audio(video_path, Path("outputs/audio.wav"))
-
-# Configure and run transcription
-config = TranscriptionConfig(
-    model_name="base",
-    language="en",
-    word_timestamps=True,
-    device="auto",
-)
-
-with FasterWhisperEngine(config) as engine:
-    transcript = engine.transcribe(audio_info.path, source_video=video_path)
-
-# Write outputs
-write_json(transcript, Path("outputs/transcript.json"))
-write_srt(transcript, Path("outputs/transcript.srt"))
-
-# Access transcript data
-print(f"Duration: {transcript.metadata.duration_s:.1f}s")
-print(f"Segments: {len(transcript.segments)}")
-
-for segment in transcript.segments:
-    print(f"[{segment.start_ts}] {segment.text}")
-```
-
-## Output Formats
-
-| Format | Description |
-|--------|-------------|
-| JSON | Full structured output with metadata, segments, and word-level timestamps |
-| TXT | Plain text with timestamps |
-| SRT | SubRip subtitle format for video players |
-
-### Output Structure
+The CLI writes two files into the output directory:
 
 ```
 outputs/
-├── video_name.wav      # Extracted audio (mono 16kHz)
-├── video_name.json     # Full transcript with metadata
-├── video_name.txt      # Plain text with timestamps
-└── video_name.srt      # SubRip subtitles
-```
-
-## Models
-
-| Model | Size | Speed | Accuracy | Use Case |
-|-------|------|-------|----------|----------|
-| tiny | 74 MB | Fastest | Lower | Quick previews |
-| base | 145 MB | Fast | Good | Development, testing |
-| small | 488 MB | Medium | Better | General use |
-| medium | 1.5 GB | Slow | High | Quality transcription |
-| large-v3 | 3.1 GB | Slowest | Highest | Best accuracy |
-| turbo | 1.6 GB | Fast | High | Production (balanced) |
-
-## Cloud Transcription (Optional)
-
-In addition to the local `faster-whisper` engine, you can use cloud-based transcription services.
-
-### OpenAI Engine
-
-Uses OpenAI's Whisper API for transcription. Returns accurate word-level timestamps.
-
-```bash
-# Set API key
-export OPENAI_API_KEY=your-api-key
-
-# Install OpenAI dependency
-uv sync --extra openai
-
-# Run transcription
-uv run --env-file .env inf3-transcribe --video inspection.MOV --engine openai
-```
-
-### Gemini Engine
-
-Uses Google's Gemini API for transcription. Note: timestamps are approximated since Gemini doesn't provide native audio timestamps.
-
-```bash
-# Set API key
-export GEMINI_API_KEY=your-api-key
-
-# Install Gemini dependency
-uv sync --extra gemini
-
-# Run transcription
-uv run inf3-transcribe --video inspection.mp4 --engine gemini
-```
-
-### Cloud Engine Comparison
-
-| Engine | Timestamps | Word-level | Cost | Notes |
-|--------|------------|------------|------|-------|
-| faster-whisper | Native | Yes | Free | Requires local compute (GPU optional) |
-| openai | Native | Yes | ~$0.006/min | Requires internet, 25MB file limit |
-| gemini | Approximated | No | Variable | Requires internet, timestamps estimated |
-
-## CLI Options
-
-```
-usage: inf3-transcribe [-h] --video VIDEO [--out OUT] [--language LANGUAGE]
-                       [--model {tiny,base,small,medium,large-v3,turbo}]
-                       [--engine {faster-whisper,openai,gemini}]
-                       [--device {auto,cpu,cuda}]
-                       [--compute-type {default,int8,float16,float32}]
-                       [--no-words] [--format FORMAT] [--no-vad]
-
-Options:
-  --video         Input video file path (required)
-  --out           Output directory (default: ./outputs)
-  --language      Language code (e.g., 'en', 'es') or auto-detect
-  --model         Whisper model size (default: base)
-  --engine        Transcription engine (default: faster-whisper)
-                  - faster-whisper: Local Whisper (no API key needed)
-                  - openai: OpenAI Whisper API (requires OPENAI_API_KEY)
-                  - gemini: Google Gemini (requires GEMINI_API_KEY)
-  --device        Compute device: auto, cpu, cuda (default: auto)
-  --compute-type  Model precision (default: auto-select)
-  --no-words      Disable word-level timestamps
-  --format        Output formats, comma-separated (default: json,txt,srt)
-  --no-vad        Disable voice activity detection filter
+├── video_name.wav  # extracted audio (mono 16kHz)
+└── video_name.txt  # transcript (one segment per line)
 ```
 
 ## Development
@@ -194,17 +49,8 @@ Options:
 # Run tests
 uv run pytest
 
-# Run tests with coverage
-uv run pytest --cov=inf3_analytics
-
-# Type checking
-uv run mypy src/
-
-# Linting
+# Lint
 uv run ruff check src/
-
-# Format code
-uv run ruff format src/
 ```
 
 ## License
