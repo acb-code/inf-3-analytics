@@ -21,6 +21,20 @@ def _check_ffmpeg() -> None:
         )
 
 
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
 def extract_audio(video_path: Path, output_path: Path) -> None:
     """Extract mono 16kHz WAV audio from a video file."""
     _check_ffmpeg()
@@ -92,6 +106,7 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
 def main(args: list[str] | None = None) -> int:
     """Run the transcription pipeline."""
     parsed = parse_args(args)
+    _load_env_file(Path(".env"))
 
     video_path: Path = parsed.video
     if not video_path.exists():
@@ -127,9 +142,10 @@ def main(args: list[str] | None = None) -> int:
             from openai import OpenAI
 
             client = OpenAI(api_key=api_key)
+            openai_model = os.environ.get("OPENAI_MODEL", "whisper-1")
             with open(audio_path, "rb") as audio_file:
                 response = client.audio.transcriptions.create(
-                    model="whisper-1",
+                    model=openai_model,
                     file=audio_file,
                 )
             text = response.text.strip()
@@ -141,7 +157,8 @@ def main(args: list[str] | None = None) -> int:
             import google.generativeai as genai
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            gemini_model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+            model = genai.GenerativeModel(gemini_model)
             audio_file = genai.upload_file(audio_path)
             response = model.generate_content(
                 [
