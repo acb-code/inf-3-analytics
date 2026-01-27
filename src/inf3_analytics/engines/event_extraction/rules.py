@@ -171,11 +171,19 @@ SEVERITY_KEYWORDS: dict[EventSeverity, set[str]] = {
 }
 
 NEGATION_TERMS = ("no", "not", "without", "none", "never", "neither")
+MEASUREMENT_NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 
 
 def _keyword_pattern(keyword: str) -> re.Pattern[str]:
     parts = [re.escape(p) for p in keyword.split()]
-    pattern = r"\b" + r"\s+".join(parts) + r"\b"
+    if len(parts) == 1:
+        word = parts[0]
+        if not keyword.endswith("s"):
+            pattern = r"\b" + word + r"s?\b"
+        else:
+            pattern = r"\b" + word + r"\b"
+    else:
+        pattern = r"\b" + r"\s+".join(parts) + r"\b"
     return re.compile(pattern)
 
 
@@ -294,14 +302,14 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
                 if matched:
                     segment_matches[event_type] = matched
 
-            # Suppress location-only matches to reduce noise
-            if (
-                EventType.LOCATION_REFERENCE in segment_matches
-                and len(segment_matches) == 1
-            ):
-                segment_matches.pop(EventType.LOCATION_REFERENCE, None)
-
             for event_type, matched in segment_matches.items():
+                if event_type == EventType.MEASUREMENT:
+                    if not MEASUREMENT_NUMBER_RE.search(text_lower):
+                        continue
+
+                if event_type == EventType.LOCATION_REFERENCE:
+                    continue
+
                 confidence = self._calculate_confidence(matched, text_lower)
                 if event_type == EventType.LOCATION_REFERENCE:
                     confidence = max(confidence - 0.15, 0.05)

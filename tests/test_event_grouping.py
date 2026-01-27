@@ -67,7 +67,7 @@ class TestTriggerFinding:
         location_triggers = [
             t for t in triggers if t.event_type == EventType.LOCATION_REFERENCE
         ]
-        assert len(location_triggers) >= 1
+        assert len(location_triggers) == 0
 
     def test_find_triggers_empty_segments(self) -> None:
         """Test trigger finding with empty segments."""
