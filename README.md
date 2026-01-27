@@ -263,6 +263,15 @@ for event in llm_events:
 | Markdown | Human-readable summary grouped by event type |
 | NDJSON | One event per line (streaming format) |
 
+### Visualize Event Outputs
+
+Use the visualization utility to see a quick summary and timeline:
+
+```bash
+uv run python examples/event_visualize.py --events outputs/events/inspection_events.json
+uv run python examples/event_visualize.py --events outputs/events/*.json --bin-size 10
+```
+
 ## CLI Options
 
 ### Transcription (inf3-transcribe)
