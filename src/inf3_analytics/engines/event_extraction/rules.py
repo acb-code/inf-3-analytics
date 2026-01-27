@@ -1,6 +1,7 @@
 """Rule-based event extraction using keyword matching."""
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -23,6 +24,13 @@ ENGINE_VERSION = "1.0.0"
 
 # Default keywords for each event type
 DEFAULT_KEYWORDS: dict[EventType, list[str]] = {
+    EventType.OBSERVATION: [
+        "observed",
+        "observation",
+        "observe",
+        "noted",
+        "note",
+    ],
     EventType.STRUCTURAL_ANOMALY: [
         "crack",
         "cracked",
@@ -162,6 +170,14 @@ SEVERITY_KEYWORDS: dict[EventSeverity, set[str]] = {
     },
 }
 
+NEGATION_TERMS = ("no", "not", "without", "none", "never", "neither")
+
+
+def _keyword_pattern(keyword: str) -> re.Pattern[str]:
+    parts = [re.escape(p) for p in keyword.split()]
+    pattern = r"\b" + r"\s+".join(parts) + r"\b"
+    return re.compile(pattern)
+
 
 @dataclass
 class TriggerMatch:
@@ -194,6 +210,7 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
         """
         super().__init__(config)
         self._keywords: dict[EventType, list[str]] = {}
+        self._keyword_patterns: dict[EventType, list[tuple[str, re.Pattern[str]]]] = {}
 
     def load(self) -> None:
         """Load keyword configuration."""
@@ -202,6 +219,10 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
 
         # Load default keywords
         self._keywords = {k: list(v) for k, v in DEFAULT_KEYWORDS.items()}
+        self._keyword_patterns = {
+            event_type: [(kw, _keyword_pattern(kw)) for kw in keywords]
+            for event_type, keywords in self._keywords.items()
+        }
 
         # TODO: Load custom keywords from file if config.keywords_file is set
 
@@ -210,6 +231,7 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
     def unload(self) -> None:
         """Release engine resources."""
         self._keywords = {}
+        self._keyword_patterns = {}
         self._loaded = False
 
     def extract(self, transcript: Transcript) -> tuple[Event, ...]:
@@ -260,21 +282,58 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
 
         for seg in segments:
             text_lower = seg.text.lower()
+            segment_matches: dict[EventType, list[str]] = {}
 
-            for event_type, keywords in self._keywords.items():
-                matched = [kw for kw in keywords if kw in text_lower]
+            for event_type, patterns in self._keyword_patterns.items():
+                matched: list[str] = []
+                for kw, pattern in patterns:
+                    match = pattern.search(text_lower)
+                    if match and not self._is_negated(text_lower, match.start(), match.end()):
+                        matched.append(kw)
+
                 if matched:
-                    confidence = self._calculate_confidence(matched, text_lower)
-                    triggers.append(
-                        TriggerMatch(
-                            segment_id=seg.id,
-                            event_type=event_type,
-                            keywords=tuple(matched),
-                            confidence=confidence,
-                        )
+                    segment_matches[event_type] = matched
+
+            # Suppress location-only matches to reduce noise
+            if (
+                EventType.LOCATION_REFERENCE in segment_matches
+                and len(segment_matches) == 1
+            ):
+                segment_matches.pop(EventType.LOCATION_REFERENCE, None)
+
+            for event_type, matched in segment_matches.items():
+                confidence = self._calculate_confidence(matched, text_lower)
+                if event_type == EventType.LOCATION_REFERENCE:
+                    confidence = max(confidence - 0.15, 0.05)
+
+                triggers.append(
+                    TriggerMatch(
+                        segment_id=seg.id,
+                        event_type=event_type,
+                        keywords=tuple(matched),
+                        confidence=confidence,
                     )
+                )
 
         return triggers
+
+    def _is_negated(self, text: str, start: int, end: int) -> bool:
+        """Check if a keyword match is negated within a short window."""
+        prefix = text[max(0, start - 80) : start]
+        suffix = text[end : min(len(text), end + 80)]
+
+        negation_prefix = re.search(
+            r"\b(" + "|".join(NEGATION_TERMS) + r")\b(?:\W+\w+){0,3}\W*$",
+            prefix,
+        )
+        if negation_prefix:
+            return True
+
+        negation_suffix = re.search(
+            r"^\W*(?:\w+\W+){0,3}\b(" + "|".join(NEGATION_TERMS) + r")\b",
+            suffix,
+        )
+        return bool(negation_suffix)
 
     def _calculate_confidence(self, keywords: list[str], _text: str) -> float:
         """Calculate confidence based on keyword density and specificity.
@@ -363,8 +422,9 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
             same_type = window.event_type == current.event_type
             gap = window.segments[0].start_s - current.segments[-1].end_s
             within_gap = gap <= self.config.merge_gap_s
+            keywords_overlap = self._keywords_overlap(window, current)
 
-            if same_type and within_gap:
+            if same_type and within_gap and (gap <= 0 or keywords_overlap):
                 # Merge windows
                 current = self._merge_two_windows(current, window)
             else:
@@ -373,6 +433,9 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
 
         merged.append(current)
         return merged
+
+    def _keywords_overlap(self, window1: SegmentWindow, window2: SegmentWindow) -> bool:
+        return bool(set(window1.keywords) & set(window2.keywords))
 
     def _merge_two_windows(
         self, window1: SegmentWindow, window2: SegmentWindow

@@ -277,7 +277,7 @@ usage: inf3-transcribe [-h] --video VIDEO [--out OUT] [--language LANGUAGE]
 
 Options:
   --video         Input video file path (required)
-  --out           Output directory (default: ./outputs)
+  --out           Output directory (default: ./outputs/events)
   --language      Language code (e.g., 'en', 'es') or auto-detect
   --model         Whisper model size (default: base)
   --engine        Transcription engine (default: faster-whisper)

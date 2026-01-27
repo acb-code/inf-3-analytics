@@ -60,8 +60,8 @@ Examples:
         "--out",
         "-o",
         type=Path,
-        default=Path("./outputs"),
-        help="Output directory (default: ./outputs)",
+        default=Path("./outputs/events"),
+        help="Output directory (default: ./outputs/events)",
     )
 
     parser.add_argument(
@@ -150,6 +150,8 @@ def main(args: list[str] | None = None) -> int:
 
     # Set up output directory
     output_dir: Path = parsed.out
+    if output_dir in (Path("outputs"), Path("./outputs")):
+        output_dir = output_dir / "events"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine base name for output files

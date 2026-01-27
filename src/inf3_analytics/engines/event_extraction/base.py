@@ -25,6 +25,7 @@ class EventExtractionConfig:
     llm_engine: str | None = None
     llm_model: str = "gpt-5-mini"
     max_segments_per_batch: int = 20
+    llm_batch_overlap: int = 1
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
@@ -39,6 +40,10 @@ class EventExtractionConfig:
         if self.merge_gap_s < 0:
             raise ValueError(
                 f"Invalid merge_gap_s: {self.merge_gap_s}. Must be >= 0"
+            )
+        if self.llm_batch_overlap < 0:
+            raise ValueError(
+                f"Invalid llm_batch_overlap: {self.llm_batch_overlap}. Must be >= 0"
             )
 
 
