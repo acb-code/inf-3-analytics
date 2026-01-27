@@ -291,14 +291,14 @@ class TestGeminiEngineTranscribe:
         video_path = tmp_path / "test.mp4"
 
         mock_response = MockGeminiResponse("Test transcription.")
-        mock_model = MagicMock()
-        mock_model.generate_content.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
 
         mock_types = MagicMock()
         mock_types.Part.from_bytes.return_value = MagicMock()
 
         engine._loaded = True
-        engine._client = mock_model
+        engine._client = mock_client
         engine._types = mock_types
         engine._model_name = "gemini-3-flash-preview"
 
