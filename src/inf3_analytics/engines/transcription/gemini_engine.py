@@ -1,5 +1,6 @@
 """Google Gemini API transcription engine implementation."""
 
+import contextlib
 import os
 import re
 from pathlib import Path
@@ -92,10 +93,8 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
     def unload(self) -> None:
         """Unload the Gemini client."""
         if self._client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._client.close()
-            except Exception:
-                pass
         self._client = None
         self._types = None
         self._model_name = None

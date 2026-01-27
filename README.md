@@ -162,7 +162,110 @@ uv run inf3-transcribe --video inspection.mp4 --engine gemini
 | openai | Native | Yes | ~$0.006/min | Requires internet, 25MB file limit |
 | gemini | Approximated | No | Variable | Requires internet, timestamps estimated |
 
+## Step 2: Event Extraction
+
+After transcription, extract events from the transcript:
+
+### CLI Usage
+
+```bash
+# Basic rule-based extraction
+uv run inf3-extract-events --transcript outputs/video.json
+
+# OpenAI LLM extraction
+uv run inf3-extract-events --transcript outputs/video.json --engine openai
+
+# Gemini LLM extraction
+uv run inf3-extract-events --transcript outputs/video.json --engine gemini
+
+# Combined: LLM + rules with correlation
+uv run inf3-extract-events --transcript outputs/video.json --engine openai --include-rules
+
+# Custom confidence threshold
+uv run inf3-extract-events --transcript outputs/video.json --min-confidence 0.5
+```
+
+### Python API
+
+```python
+from pathlib import Path
+from inf3_analytics.engines.event_extraction import EventExtractionConfig
+from inf3_analytics.engines.event_extraction.rules import RuleBasedEventEngine
+from inf3_analytics.io.transcript_writer import read_json as read_transcript
+from inf3_analytics.io.event_writer import write_json, write_markdown
+
+# Load transcript
+transcript = read_transcript(Path("outputs/video.json"))
+
+# Configure extraction
+config = EventExtractionConfig(
+    context_window=1,
+    min_confidence=0.3,
+    merge_gap_s=5.0,
+)
+
+# Extract events with rules engine
+with RuleBasedEventEngine(config) as engine:
+    events = engine.extract(transcript)
+
+print(f"Found {len(events)} events")
+for event in events:
+    print(f"[{event.start_ts}] {event.event_type.value}: {event.title}")
+```
+
+### LLM Extraction with Correlation
+
+```python
+from inf3_analytics.engines.event_extraction.llm import OpenAIEventEngine
+from inf3_analytics.engines.event_extraction.rules import RuleBasedEventEngine
+
+# First, run rules-based extraction
+with RuleBasedEventEngine(config) as rules_engine:
+    rule_events = rules_engine.extract(transcript)
+
+# Then run LLM extraction with correlation
+config.llm_model = "gpt-5-mini"
+with OpenAIEventEngine(config) as llm_engine:
+    llm_events = llm_engine.extract(transcript, rule_events=rule_events)
+
+# LLM events include correlation info
+for event in llm_events:
+    if event.related_rule_events:
+        print(f"LLM event correlates with: {event.related_rule_events.rule_event_ids}")
+```
+
+### Event Types
+
+| Type | Description |
+|------|-------------|
+| structural_anomaly | Crack, corrosion, deformation, damage |
+| safety_risk | Dangerous conditions, hazards |
+| maintenance_note | Repair recommendations, service needs |
+| measurement | Numeric measurements reported |
+| location_reference | Location or position mentioned |
+| uncertainty | Questions or unclear observations |
+| observation | General inspection observation |
+| other | Uncategorized events |
+
+### Event Extraction Engines
+
+| Engine | Description | API Key |
+|--------|-------------|---------|
+| rules | Keyword matching (fast, offline) | None |
+| openai | GPT-based extraction (gpt-5-mini default) | OPENAI_API_KEY |
+| gemini | Gemini-based extraction (gemini-3-flash-preview default) | GEMINI_API_KEY |
+
+### Event Output Formats
+
+| Format | Description |
+|--------|-------------|
+| JSON | Full structured output with events, metadata, and correlations |
+| Markdown | Human-readable summary grouped by event type |
+| NDJSON | One event per line (streaming format) |
+
 ## CLI Options
+
+### Transcription (inf3-transcribe)
 
 ```
 usage: inf3-transcribe [-h] --video VIDEO [--out OUT] [--language LANGUAGE]
@@ -186,6 +289,28 @@ Options:
   --no-words      Disable word-level timestamps
   --format        Output formats, comma-separated (default: json,txt,srt)
   --no-vad        Disable voice activity detection filter
+```
+
+### Event Extraction (inf3-extract-events)
+
+```
+usage: inf3-extract-events [-h] --transcript TRANSCRIPT [--out OUT]
+                           [--engine {rules,openai,gemini}]
+                           [--llm-model LLM_MODEL] [--include-rules]
+                           [--context-window CONTEXT_WINDOW]
+                           [--min-confidence MIN_CONFIDENCE]
+                           [--merge-gap MERGE_GAP] [--format FORMAT]
+
+Options:
+  --transcript    Input transcript JSON file (required)
+  --out           Output directory (default: ./outputs)
+  --engine        Extraction engine: rules, openai, gemini (default: rules)
+  --llm-model     LLM model name (default: gpt-5-mini or gemini-3-flash-preview)
+  --include-rules When using LLM, also run rules and correlate events
+  --context-window Context segments around triggers (default: 1)
+  --min-confidence Minimum confidence threshold (default: 0.3)
+  --merge-gap     Max gap to merge adjacent events (default: 5.0s)
+  --format        Output formats: json,md,ndjson (default: json,md)
 ```
 
 ## Development
