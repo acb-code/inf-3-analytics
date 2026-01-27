@@ -11,6 +11,8 @@ This is an infrastructure inspection video analytics pipeline. The core philosop
 3. **Engine Abstraction**: Processing engines (transcription, vision, etc.) follow a common protocol pattern
 4. **Modular IO**: Separate readers/writers for each output format
 
+Prefer conciseness and simplicity.
+
 ## Project Roadmap
 
 ### Step 1: Video Transcription (Current)
@@ -58,18 +60,6 @@ This is an infrastructure inspection video analytics pipeline. The core philosop
 - Job queue
 - Progress tracking
 
-## Directory Structure
-
-```
-src/inf3_analytics/
-├── types/          # Core data types (dataclasses)
-├── utils/          # Shared utilities (time formatting, etc.)
-├── media/          # Media processing (audio/video extraction)
-├── engines/        # Processing engines (transcription, vision, etc.)
-│   └── transcription/
-├── io/             # Input/output handlers
-└── cli/            # Command-line interfaces
-```
 
 ## Coding Conventions
 
@@ -78,28 +68,6 @@ src/inf3_analytics/
 - **Immutability**: Prefer frozen dataclasses and tuples
 - **Error handling**: Custom exceptions with clear messages
 - **Testing**: Unit tests that don't require network/model downloads
-
-## Key Types
-
-### Transcript Types
-- `Word`: Single word with timing and probability
-- `Segment`: Transcript segment with optional word-level detail
-- `Transcript`: Complete transcript with metadata
-- `TranscriptMetadata`: Engine, model, language, duration info
-
-### Media Types
-- `AudioInfo`: Extracted audio file details
-- `VideoInfo`: Video file metadata
-
-### Engine Types
-- `TranscriptionConfig`: Engine configuration
-- `TranscriptionEngine`: Protocol for transcription backends
-
-## Dependencies Rationale
-
-- **faster-whisper**: CTranslate2-based Whisper, 4x faster than OpenAI implementation
-- **pydantic**: For future API validation and settings management
-- **FFmpeg**: Industry standard for audio/video processing
 
 ## Running the Project
 
@@ -116,38 +84,3 @@ uv run pytest
 # Type check
 uv run mypy src/
 ```
-
-## When to Use Each Transcription Engine
-
-| Engine | Best For | Limitations |
-|--------|----------|-------------|
-| faster-whisper | Offline use, privacy-sensitive data, best accuracy | Requires local compute; GPU recommended for speed |
-| openai | Quick setup, no GPU available, accurate timestamps | Costs money, requires internet, 25MB file limit |
-| gemini | Cost-effective cloud option, large files | Timestamps are approximated, no word-level timing |
-
-### Decision Guide
-
-1. **Use faster-whisper** (default) when:
-   - You have a GPU or don't mind slower CPU processing
-   - Data privacy is important
-   - You need the most accurate timestamps
-   - Working offline
-
-2. **Use openai** when:
-   - You need cloud processing without GPU
-   - Accurate word-level timestamps are required
-   - Files are under 25MB
-   - You have an OpenAI API key
-
-3. **Use gemini** when:
-   - You want cloud processing with potentially lower costs
-   - Exact timestamps are not critical
-   - Processing large files that exceed OpenAI's limit
-
-## Notes for Future Development
-
-1. **Model caching**: faster-whisper downloads models to `~/.cache/huggingface/`
-2. **GPU memory**: Large models need 4-8GB VRAM; use smaller models or CPU for limited hardware
-3. **Audio format**: Whisper expects 16kHz mono; extraction handles conversion
-4. **Timestamp precision**: Using milliseconds throughout; SRT format uses comma separator
-5. **Cloud dependencies**: Install with `uv sync --extra openai` or `uv sync --extra gemini` or `uv sync --extra cloud` for both
