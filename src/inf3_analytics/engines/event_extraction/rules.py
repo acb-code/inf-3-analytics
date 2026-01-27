@@ -178,10 +178,8 @@ def _keyword_pattern(keyword: str) -> re.Pattern[str]:
     parts = [re.escape(p) for p in keyword.split()]
     if len(parts) == 1:
         word = parts[0]
-        if not keyword.endswith("s"):
-            pattern = r"\b" + word + r"s?\b"
-        else:
-            pattern = r"\b" + word + r"\b"
+        # Add optional 's' suffix for singular keywords
+        pattern = r"\b" + word + r"s?\b" if not keyword.endswith("s") else r"\b" + word + r"\b"
     else:
         pattern = r"\b" + r"\s+".join(parts) + r"\b"
     return re.compile(pattern)
@@ -303,16 +301,15 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
                     segment_matches[event_type] = matched
 
             for event_type, matched in segment_matches.items():
-                if event_type == EventType.MEASUREMENT:
-                    if not MEASUREMENT_NUMBER_RE.search(text_lower):
-                        continue
+                # Skip measurements without actual numbers
+                if event_type == EventType.MEASUREMENT and not MEASUREMENT_NUMBER_RE.search(text_lower):
+                    continue
 
+                # Skip location references (too noisy as standalone events)
                 if event_type == EventType.LOCATION_REFERENCE:
                     continue
 
                 confidence = self._calculate_confidence(matched, text_lower)
-                if event_type == EventType.LOCATION_REFERENCE:
-                    confidence = max(confidence - 0.15, 0.05)
 
                 triggers.append(
                     TriggerMatch(

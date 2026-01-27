@@ -1,5 +1,6 @@
 """LLM-based event extraction using cloud APIs."""
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -344,7 +345,7 @@ def _parse_llm_response(
     try:
         events_data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise APIError(f"Failed to parse LLM response as JSON: {e}\nResponse: {text[:500]}")
+        raise APIError(f"Failed to parse LLM response as JSON: {e}\nResponse: {text[:500]}") from e
 
     if not isinstance(events_data, list):
         raise APIError(f"Expected JSON array, got: {type(events_data)}")
@@ -367,10 +368,8 @@ def _parse_llm_response(
             severity_str = data.get("severity")
             severity = None
             if severity_str:
-                try:
+                with contextlib.suppress(ValueError):
                     severity = EventSeverity(severity_str)
-                except ValueError:
-                    pass
 
             # Parse segment IDs and get timing
             segment_ids = _coerce_int_list(data.get("segment_ids", []))
@@ -442,6 +441,9 @@ def _parse_llm_response(
             # Create event
             confidence = _clamp_float(data.get("confidence", 0.7), default=0.7)
 
+            # Include model name in engine identifier for traceability
+            engine_identifier = f"{engine_name}/{model_name}"
+
             event = Event(
                 event_id=event_id,
                 event_type=event_type,
@@ -460,7 +462,7 @@ def _parse_llm_response(
                 ),
                 suggested_actions=suggested_actions,
                 metadata=EventMetadata(
-                    extractor_engine=engine_name,
+                    extractor_engine=engine_identifier,
                     extractor_version=ENGINE_VERSION,
                     created_at=now,
                     source_transcript_path=source_path,
@@ -562,7 +564,7 @@ class OpenAIEventEngine(BaseEventExtractionEngine):
             prompt = _build_extraction_prompt(batch, batch_rule_events)
 
             try:
-                request_args = {
+                request_args: dict[str, Any] = {
                     "model": self._model_name,
                     "messages": [
                         {

@@ -119,10 +119,14 @@ class RuleEventCorrelation:
         if not isinstance(rule_event_ids_data, list):
             raise ValueError("rule_event_ids must be a list")
 
+        overlap_score = data["overlap_score"]
+        if isinstance(overlap_score, list):
+            raise ValueError("overlap_score must be a number")
+
         return cls(
             rule_event_ids=tuple(str(e) for e in rule_event_ids_data),
             correlation_reason=str(data["correlation_reason"]),
-            overlap_score=float(data["overlap_score"]),
+            overlap_score=float(overlap_score),
         )
 
 
