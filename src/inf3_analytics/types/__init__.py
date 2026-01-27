@@ -9,6 +9,13 @@ from inf3_analytics.types.event import (
     RuleEventCorrelation,
     TranscriptReference,
 )
+from inf3_analytics.types.frame import (
+    EventFrameSet,
+    Frame,
+    FrameExtractionMetadata,
+    FrameExtractionStatus,
+    FrameManifest,
+)
 from inf3_analytics.types.media import AudioInfo, VideoInfo
 from inf3_analytics.types.transcript import (
     Segment,
@@ -21,10 +28,15 @@ from inf3_analytics.types.transcript import (
 __all__ = [
     "AudioInfo",
     "Event",
+    "EventFrameSet",
     "EventList",
     "EventMetadata",
     "EventSeverity",
     "EventType",
+    "Frame",
+    "FrameExtractionMetadata",
+    "FrameExtractionStatus",
+    "FrameManifest",
     "RuleEventCorrelation",
     "Segment",
     "Transcript",
