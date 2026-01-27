@@ -35,12 +35,19 @@ class TestGeminiEngineLoad:
         """load() succeeds when GEMINI_API_KEY is set."""
         engine = GeminiTranscriptionEngine()
         mock_genai = MagicMock()
+        mock_genai.Client.return_value = MagicMock()
+        mock_types = MagicMock()
         mock_google = MagicMock()
-        mock_google.generativeai = mock_genai
+        mock_google.genai = mock_genai
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             with patch.dict(
-                "sys.modules", {"google": mock_google, "google.generativeai": mock_genai}
+                "sys.modules",
+                {
+                    "google": mock_google,
+                    "google.genai": mock_genai,
+                    "google.genai.types": mock_types,
+                },
             ):
                 engine.load()
                 assert engine.is_loaded
@@ -49,12 +56,19 @@ class TestGeminiEngineLoad:
         """load() succeeds when GOOGLE_API_KEY is set (fallback)."""
         engine = GeminiTranscriptionEngine()
         mock_genai = MagicMock()
+        mock_genai.Client.return_value = MagicMock()
+        mock_types = MagicMock()
         mock_google = MagicMock()
-        mock_google.generativeai = mock_genai
+        mock_google.genai = mock_genai
 
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "test-key"}, clear=True):
             with patch.dict(
-                "sys.modules", {"google": mock_google, "google.generativeai": mock_genai}
+                "sys.modules",
+                {
+                    "google": mock_google,
+                    "google.genai": mock_genai,
+                    "google.genai.types": mock_types,
+                },
             ):
                 engine.load()
                 assert engine.is_loaded
@@ -63,17 +77,24 @@ class TestGeminiEngineLoad:
         """load() can be called multiple times safely."""
         engine = GeminiTranscriptionEngine()
         mock_genai = MagicMock()
+        mock_genai.Client.return_value = MagicMock()
+        mock_types = MagicMock()
         mock_google = MagicMock()
-        mock_google.generativeai = mock_genai
+        mock_google.genai = mock_genai
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             with patch.dict(
-                "sys.modules", {"google": mock_google, "google.generativeai": mock_genai}
+                "sys.modules",
+                {
+                    "google": mock_google,
+                    "google.genai": mock_genai,
+                    "google.genai.types": mock_types,
+                },
             ):
                 engine.load()
                 engine.load()
-                # Configure should only be called once
-                assert mock_genai.configure.call_count == 1
+                # Client should only be created once
+                assert mock_genai.Client.call_count == 1
 
 
 class TestGeminiEngineUnload:
@@ -83,12 +104,19 @@ class TestGeminiEngineUnload:
         """unload() clears the loaded state."""
         engine = GeminiTranscriptionEngine()
         mock_genai = MagicMock()
+        mock_genai.Client.return_value = MagicMock()
+        mock_types = MagicMock()
         mock_google = MagicMock()
-        mock_google.generativeai = mock_genai
+        mock_google.genai = mock_genai
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             with patch.dict(
-                "sys.modules", {"google": mock_google, "google.generativeai": mock_genai}
+                "sys.modules",
+                {
+                    "google": mock_google,
+                    "google.genai": mock_genai,
+                    "google.genai.types": mock_types,
+                },
             ):
                 engine.load()
                 assert engine.is_loaded
@@ -173,8 +201,8 @@ class TestGeminiEngineTranscribe:
         """transcribe() raises FileNotFoundError for missing audio file."""
         engine = GeminiTranscriptionEngine()
         engine._loaded = True
-        engine._model = MagicMock()
-        engine._genai = MagicMock()
+        engine._client = MagicMock()
+        engine._types = MagicMock()
 
         with pytest.raises(FileNotFoundError):
             engine.transcribe(tmp_path / "nonexistent.wav")
@@ -186,12 +214,16 @@ class TestGeminiEngineTranscribe:
         audio_path.write_bytes(b"fake audio data")
 
         mock_response = MockGeminiResponse("Hello world. This is a test.")
-        mock_model = MagicMock()
-        mock_model.generate_content.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        mock_types = MagicMock()
+        mock_types.Part.from_bytes.return_value = MagicMock()
 
         engine._loaded = True
-        engine._model = mock_model
-        engine._genai = MagicMock()
+        engine._client = mock_client
+        engine._types = mock_types
+        engine._model_name = "gemini-3-flash-preview"
 
         with patch.object(engine, "_get_audio_duration", return_value=10.0):
             transcript = engine.transcribe(audio_path)
@@ -208,12 +240,16 @@ class TestGeminiEngineTranscribe:
         audio_path.write_bytes(b"fake audio data")
 
         mock_response = MockGeminiResponse("Hello world. Goodbye now.")
-        mock_model = MagicMock()
-        mock_model.generate_content.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        mock_types = MagicMock()
+        mock_types.Part.from_bytes.return_value = MagicMock()
 
         engine._loaded = True
-        engine._model = mock_model
-        engine._genai = MagicMock()
+        engine._client = mock_client
+        engine._types = mock_types
+        engine._model_name = "gemini-3-flash-preview"
 
         with patch.object(engine, "_get_audio_duration", return_value=10.0):
             transcript = engine.transcribe(audio_path)
@@ -230,12 +266,16 @@ class TestGeminiEngineTranscribe:
         audio_path.write_bytes(b"fake audio data")
 
         mock_response = MockGeminiResponse("Hello world.")
-        mock_model = MagicMock()
-        mock_model.generate_content.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        mock_types = MagicMock()
+        mock_types.Part.from_bytes.return_value = MagicMock()
 
         engine._loaded = True
-        engine._model = mock_model
-        engine._genai = MagicMock()
+        engine._client = mock_client
+        engine._types = mock_types
+        engine._model_name = "gemini-3-flash-preview"
 
         with patch.object(engine, "_get_audio_duration", return_value=5.0):
             transcript = engine.transcribe(audio_path)
@@ -254,9 +294,13 @@ class TestGeminiEngineTranscribe:
         mock_model = MagicMock()
         mock_model.generate_content.return_value = mock_response
 
+        mock_types = MagicMock()
+        mock_types.Part.from_bytes.return_value = MagicMock()
+
         engine._loaded = True
-        engine._model = mock_model
-        engine._genai = MagicMock()
+        engine._client = mock_model
+        engine._types = mock_types
+        engine._model_name = "gemini-3-flash-preview"
 
         with patch.object(engine, "_get_audio_duration", return_value=5.0):
             transcript = engine.transcribe(audio_path, source_video=video_path)
@@ -270,12 +314,16 @@ class TestGeminiEngineTranscribe:
         audio_path = tmp_path / "test.wav"
         audio_path.write_bytes(b"fake audio data")
 
-        mock_model = MagicMock()
-        mock_model.generate_content.side_effect = Exception("API Error")
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("API Error")
+
+        mock_types = MagicMock()
+        mock_types.Part.from_bytes.return_value = MagicMock()
 
         engine._loaded = True
-        engine._model = mock_model
-        engine._genai = MagicMock()
+        engine._client = mock_client
+        engine._types = mock_types
+        engine._model_name = "gemini-3-flash-preview"
 
         with patch.object(engine, "_get_audio_duration", return_value=5.0):
             with pytest.raises(APIError, match="Gemini API call failed"):
@@ -288,12 +336,19 @@ class TestGeminiEngineContextManager:
     def test_context_manager_loads_and_unloads(self) -> None:
         """Context manager properly loads and unloads the engine."""
         mock_genai = MagicMock()
+        mock_genai.Client.return_value = MagicMock()
+        mock_types = MagicMock()
         mock_google = MagicMock()
-        mock_google.generativeai = mock_genai
+        mock_google.genai = mock_genai
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             with patch.dict(
-                "sys.modules", {"google": mock_google, "google.generativeai": mock_genai}
+                "sys.modules",
+                {
+                    "google": mock_google,
+                    "google.genai": mock_genai,
+                    "google.genai.types": mock_types,
+                },
             ):
                 with GeminiTranscriptionEngine() as engine:
                     assert engine.is_loaded

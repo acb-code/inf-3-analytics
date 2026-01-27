@@ -49,8 +49,9 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
             config: Transcription configuration
         """
         super().__init__(config)
-        self._genai: Any = None
-        self._model: Any = None
+        self._client: Any = None
+        self._types: Any = None
+        self._model_name: str | None = None
 
     def load(self) -> None:
         """Initialize the Gemini client.
@@ -69,29 +70,35 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
             )
 
         try:
-            import google.generativeai as genai
-
-            genai.configure(api_key=api_key)
-            self._genai = genai
+            from google import genai
+            from google.genai import types
 
             # Use configurable model or default to gemini-2.0-flash
             model_name = self.config.model_name
             if model_name in ("tiny", "base", "small", "medium", "large-v3", "turbo"):
                 # Map Whisper model names to Gemini model
-                model_name = "gemini-2.0-flash"
+                model_name = "gemini-3-flash-preview"
 
-            self._model = genai.GenerativeModel(model_name)
+            self._client = genai.Client(api_key=api_key)
+            self._types = types
+            self._model_name = model_name
             self._loaded = True
         except ImportError as e:
             raise ImportError(
-                "google-generativeai package is not installed. "
-                "Install with: uv add google-generativeai or pip install google-generativeai"
+                "google-genai package is not installed. "
+                "Install with: uv add google-genai or pip install google-genai"
             ) from e
 
     def unload(self) -> None:
         """Unload the Gemini client."""
-        self._genai = None
-        self._model = None
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+        self._client = None
+        self._types = None
+        self._model_name = None
         self._loaded = False
 
     def _get_audio_duration(self, audio_path: Path) -> float:
@@ -189,7 +196,7 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
             FileNotFoundError: If audio file doesn't exist
             APIError: If API call fails
         """
-        if not self._loaded or self._model is None or self._genai is None:
+        if not self._loaded or self._client is None or self._types is None:
             raise RuntimeError("Client not loaded. Call load() first or use context manager.")
 
         if not audio_path.exists():
@@ -202,30 +209,28 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
         file_size_mb = audio_path.stat().st_size / (1024 * 1024)
 
         try:
+            # Determine MIME type
+            suffix = audio_path.suffix.lower()
+            mime_types = {
+                ".wav": "audio/wav",
+                ".mp3": "audio/mpeg",
+                ".m4a": "audio/mp4",
+                ".flac": "audio/flac",
+                ".ogg": "audio/ogg",
+            }
+            mime_type = mime_types.get(suffix, "audio/wav")
+
             if file_size_mb > self.MAX_INLINE_SIZE_MB:
                 # Upload file for larger audio
-                audio_file = self._genai.upload_file(audio_path)
-                audio_content = audio_file
+                audio_content = self._client.files.upload(file=audio_path)
             else:
                 # Inline for smaller files
                 with open(audio_path, "rb") as f:
                     audio_data = f.read()
 
-                # Determine MIME type
-                suffix = audio_path.suffix.lower()
-                mime_types = {
-                    ".wav": "audio/wav",
-                    ".mp3": "audio/mpeg",
-                    ".m4a": "audio/mp4",
-                    ".flac": "audio/flac",
-                    ".ogg": "audio/ogg",
-                }
-                mime_type = mime_types.get(suffix, "audio/wav")
-
-                audio_content = {
-                    "mime_type": mime_type,
-                    "data": audio_data,
-                }
+                audio_content = self._types.Part.from_bytes(
+                    data=audio_data, mime_type=mime_type
+                )
 
             # Build transcription prompt
             language_hint = ""
@@ -239,7 +244,9 @@ class GeminiTranscriptionEngine(BaseTranscriptionEngine):
                 "there are clear pauses or topic changes."
             )
 
-            response = self._model.generate_content([prompt, audio_content])
+            response = self._client.models.generate_content(
+                model=self._model_name, contents=[prompt, audio_content]
+            )
             transcript_text = response.text.strip()
 
         except Exception as e:
