@@ -272,6 +272,146 @@ uv run python examples/event_visualize.py --events outputs/events/inspection_eve
 uv run python examples/event_visualize.py --events outputs/events/*.json --bin-size 10
 ```
 
+## Step 3: Frame Extraction
+
+Extract video frames for each event's time window:
+
+### CLI Usage
+
+```bash
+# Extract 5 frames per event (default)
+uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json
+
+# Extract 10 frames per event
+uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json --n 10
+
+# Use fixed FPS sampling (2 FPS, max 20 frames)
+uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json --policy fps --fps 2 --max-frames 20
+```
+
+### Output Structure
+
+```
+outputs/event_frames/
+├── manifest.json                    # Top-level manifest
+├── evt_001_crack_detected/
+│   ├── frames.json                  # Per-event frame metadata
+│   └── frames/
+│       ├── 000_00-00-10.500.jpg
+│       ├── 001_00-00-12.250.jpg
+│       └── ...
+└── evt_002_corrosion_found/
+    └── ...
+```
+
+## Step 4: Frame Analytics (VLM-first)
+
+Run VLM-based analysis on extracted frames to detect infrastructure issues:
+
+### Setup
+
+```bash
+# For OpenAI (GPT-5-mini)
+export OPENAI_API_KEY=your-api-key
+uv sync --extra openai
+
+# For Gemini (gemini-3-flash-preview)
+export GEMINI_API_KEY=your-api-key
+uv sync --extra gemini
+
+# For baseline quality metrics (no API required)
+uv sync --extra cv
+```
+
+### CLI Usage
+
+```bash
+# Analyze with Gemini (default VLM engine)
+uv run --env-file .env inf3-frame-analytics --event-frames outputs/event_frames --out outputs/frame_analytics
+
+# Analyze with OpenAI GPT-5-mini
+uv run --env-file .env inf3-frame-analytics --event-frames outputs/event_frames --engine openai
+
+# Use baseline quality metrics (no API, local only)
+uv run inf3-frame-analytics --event-frames outputs/event_frames --engine baseline_quality
+
+# With event context for richer prompts
+uv run --env-file .env inf3-frame-analytics --event-frames outputs/event_frames --events outputs/events.json
+
+# Rate limiting for cost control
+uv run --env-file .env inf3-frame-analytics --event-frames outputs/event_frames \
+  --max-frames-per-event 5 \
+  --max-total-frames 50 \
+  --sleep-ms 500
+
+# Dry run - see what would be processed without API calls
+uv run inf3-frame-analytics --event-frames outputs/event_frames --dry-run
+```
+
+### Output Structure
+
+```
+outputs/frame_analytics/
+├── manifest_analytics.json          # Run manifest with traceability
+├── analytics_report.md              # Human-readable summary
+├── evt_001_crack/
+│   ├── frame_analyses.jsonl         # Per-frame results (one JSON per line)
+│   └── event_summary.json           # Aggregated event summary
+└── evt_002_corrosion/
+    └── ...
+```
+
+### Detection Types
+
+| Type | Description |
+|------|-------------|
+| structural_anomaly | Deformation, displacement, general structural issues |
+| corrosion | Rust, oxidation, material degradation |
+| crack | Cracks, fractures, splits |
+| spalling | Concrete spalling, surface deterioration |
+| leak | Water damage, staining, moisture |
+| obstruction | Blockages, debris |
+| safety_risk | Safety hazards |
+| equipment_issue | Camera/image quality issues (baseline engine) |
+
+### Analytics Engines
+
+| Engine | Description | API Key | Use Case |
+|--------|-------------|---------|----------|
+| gemini | Gemini-3-Flash-Preview VLM | GEMINI_API_KEY | Primary (recommended) |
+| openai | GPT-5-mini VLM | OPENAI_API_KEY | Primary alternative |
+| baseline_quality | OpenCV quality metrics | None | Fallback, image QA |
+
+### Cost and Latency Considerations
+
+VLM APIs incur costs per image analyzed. Use these options to control:
+
+- `--max-frames-per-event N`: Limit frames analyzed per event
+- `--max-total-frames N`: Cap total frames in a run
+- `--sleep-ms N`: Rate limit between API calls
+- `--dry-run`: Preview what would be processed
+
+The baseline_quality engine is free and instant but only detects image quality issues (blur, exposure), not infrastructure defects.
+
+### Traceability
+
+Every analysis result includes full traceability:
+
+```json
+{
+  "engine": {
+    "name": "vlm",
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "prompt_version": "v1",
+    "version": "0.1.0"
+  },
+  "event_id": "evt_001",
+  "frame_idx": 0,
+  "timestamp_s": 10.5
+}
+```
+
 ## CLI Options
 
 ### Transcription (inf3-transcribe)
@@ -320,6 +460,46 @@ Options:
   --min-confidence Minimum confidence threshold (default: 0.3)
   --merge-gap     Max gap to merge adjacent events (default: 5.0s)
   --format        Output formats: json,md,ndjson (default: json,md)
+```
+
+### Frame Extraction (inf3-extract-event-frames)
+
+```
+usage: inf3-extract-event-frames [-h] --video VIDEO --events EVENTS [--out OUT]
+                                 [--policy {nframes,fps}] [--n N] [--fps FPS]
+                                 [--max-frames MAX_FRAMES] [--quality 1-31]
+
+Options:
+  --video         Input video file (required)
+  --events        Input events JSON file (required)
+  --out           Output directory (default: ./outputs/event_frames)
+  --policy        Frame sampling policy: nframes or fps (default: nframes)
+  --n             Frames per event for nframes policy (default: 5)
+  --fps           Frames per second for fps policy (default: 1.0)
+  --max-frames    Max frames per event for fps policy (default: 30)
+  --quality       JPEG quality 1-31, lower is better (default: 2)
+```
+
+### Frame Analytics (inf3-frame-analytics)
+
+```
+usage: inf3-frame-analytics [-h] --event-frames EVENT_FRAMES [--events EVENTS]
+                            [--out OUT] [--engine {gemini,openai,baseline_quality}]
+                            [--model MODEL] [--max-frames-per-event N]
+                            [--max-total-frames N] [--sleep-ms N]
+                            [--fallback-to-baseline] [--dry-run]
+
+Options:
+  --event-frames  Directory with event frames and manifest.json (required)
+  --events        Optional events.json for richer context
+  --out           Output directory (default: ./outputs/frame_analytics)
+  --engine        Analytics engine: gemini, openai, baseline_quality (default: gemini)
+  --model         Override model name (e.g., gpt-5-mini, gemini-3-flash-preview)
+  --max-frames-per-event  Max frames to analyze per event (default: 10)
+  --max-total-frames      Max total frames to analyze (default: 100)
+  --sleep-ms              Delay between API requests in ms (default: 200)
+  --fallback-to-baseline  Fall back to baseline if VLM fails
+  --dry-run               Show what would be processed without API calls
 ```
 
 ## Development

@@ -15,50 +15,85 @@ Prefer conciseness and simplicity.
 
 ## Project Roadmap
 
-### Step 1: Video Transcription (Current)
+### Step 1: Video Transcription (Complete)
 - Audio extraction via FFmpeg
 - Faster-Whisper transcription with word-level timestamps
+- Cloud engines: OpenAI, Gemini
 - Output: JSON, TXT, SRT formats
 
-### Step 2: Frame Extraction (Planned)
-- Configurable frame sampling (FPS-based, scene change, keyframes)
-- Frame metadata with timestamps
-- Thumbnail generation
+### Step 2: Event Extraction (Complete)
+- Rule-based keyword extraction
+- LLM-based extraction (OpenAI, Gemini)
+- Event correlation between engines
+- Output: JSON, Markdown, NDJSON
 
-### Step 3: Vision Analysis (Planned)
-- Frame description using vision models
-- Object detection integration
-- Defect/anomaly detection for infrastructure
+### Step 3: Frame Extraction (Complete)
+- Configurable frame sampling (N-frames, fixed FPS)
+- Frame metadata with timestamps aligned to events
+- JPEG output with quality control
 
-### Step 4: Event Detection (Planned)
-- Audio event detection (alarms, impacts, speech patterns)
-- Visual event detection (motion, scene changes)
-- Event timeline generation
+### Step 4: Frame Analytics (Complete)
+- **VLM-first approach**: Primary analysis via vision-language models
+- Engines: Gemini-3-Flash-Preview, GPT-5-mini
+- Fallback: Baseline quality metrics (OpenCV)
+- Per-frame detections with bounding boxes
+- Event-level aggregation and summaries
 
-### Step 5: Multimodal Alignment (Planned)
-- Cross-modal timestamp alignment
-- Unified timeline with all modalities
-- Conflict resolution strategies
+### Step 5: Video Pipeline Alignment (Planned)
+- Frame extraction with transcript timestamp alignment
+- Unified timeline across modalities
 
-### Step 6: Search & Query (Planned)
-- Text search across transcripts
-- Semantic search with embeddings
-- Time-range queries
+### Step 6: Multimodal Detection (Planned)
+- Combined audio + visual event detection
+- Cross-modal reconciliation
 
-### Step 7: Report Generation (Planned)
-- Summary generation
-- Highlight extraction
-- Export to various formats
+### Step 7: 3D Reconstruction (Planned)
+- Point cloud generation from video
+- Spatial analysis
 
-### Step 8: Streaming Support (Planned)
-- Real-time processing
-- Incremental updates
-- WebSocket API
+### Step 8: Design Model Comparison (Planned)
+- Tag events in 3D space
+- Compare to design models
 
 ### Step 9: API Service (Planned)
-- REST API
+- FastAPI integration
 - Job queue
 - Progress tracking
+
+## VLM-First Approach (Step 4)
+
+Frame analytics prioritizes vision-language models for infrastructure inspection:
+
+### Engine Priority
+1. **Primary**: VLM engines (Gemini, OpenAI) for semantic understanding
+2. **Fallback**: Baseline quality metrics for image QA when VLM unavailable
+
+### Prompt Versioning
+Prompts are versioned and stored in code (`prompting.py`):
+- `PROMPT_VERSION = "v1"` tracks prompt changes
+- Version recorded in all outputs for reproducibility
+- Enables A/B testing of prompt improvements
+
+### Traceability Fields
+Every frame analysis includes:
+```python
+EngineInfo(
+    name="vlm",                    # Engine type
+    provider="gemini",             # API provider
+    model="gemini-3-flash-preview", # Model name
+    prompt_version="v1",           # Prompt version
+    version="0.1.0",               # Engine code version
+    config={...}                   # Runtime config
+)
+```
+
+### Detection Schema
+Structured output with validation:
+- Detection type enum (crack, corrosion, leak, etc.)
+- Confidence scores (0-1)
+- Optional bounding boxes (normalized coordinates)
+- Severity levels (low/medium/high)
+- QA pairs from inspection checklist
 
 
 ## Coding Conventions

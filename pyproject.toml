@@ -38,11 +38,16 @@ cloud = [
     "openai>=1.0.0,<2.0.0",
     "google-genai>=1.0.0,<2.0.0",
 ]
+cv = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+]
 
 [project.scripts]
 inf3-transcribe = "inf3_analytics.cli.transcribe:main"
 inf3-extract-events = "inf3_analytics.cli.extract_events:main"
 inf3-extract-event-frames = "inf3_analytics.cli.extract_event_frames:main"
+inf3-frame-analytics = "inf3_analytics.cli.run_frame_analytics:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/inf3_analytics"]
@@ -93,6 +98,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["google.genai.*", "google.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["cv2.*", "numpy.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
