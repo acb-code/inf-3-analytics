@@ -1,6 +1,7 @@
 """CLI for running frame analytics on extracted event frames."""
 
 import argparse
+import json
 import sys
 import time
 import uuid
@@ -19,6 +20,37 @@ from inf3_analytics.io.event_writer import read_json as read_events_json
 from inf3_analytics.io.frame_manifest_writer import read_manifest
 from inf3_analytics.types.detection import AnalyticsManifest, EventAnalyticsSummary, FrameMeta
 from inf3_analytics.types.event import Event
+
+
+def _find_event_directory(event_frames_dir: Path, event_id: str) -> Path | None:
+    """Find the directory containing frames for the given event_id.
+
+    The frame extraction creates directories with format evt_{idx}_{title},
+    but the manifest stores the full event_id. We need to find the matching
+    directory by checking the frames.json file in each subdirectory.
+
+    Args:
+        event_frames_dir: Base directory containing event frame directories
+        event_id: Event ID to find
+
+    Returns:
+        Path to the event directory, or None if not found
+    """
+    for subdir in event_frames_dir.iterdir():
+        if not subdir.is_dir():
+            continue
+
+        frames_json = subdir / "frames.json"
+        if frames_json.exists():
+            try:
+                with open(frames_json) as f:
+                    data = json.load(f)
+                if data.get("event_id") == event_id:
+                    return subdir
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    return None
 
 
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
@@ -266,16 +298,16 @@ def main(args: list[str] | None = None) -> int:
                 remaining = config.max_total_frames - frames_processed
                 frames_to_analyze = frames_to_analyze[:remaining]
 
+                # Find the actual event directory (may differ from event_id)
+                event_source_dir = _find_event_directory(event_frames_dir, efs.event_id)
+                if event_source_dir is None:
+                    print(f"    Warning: Could not find directory for event {efs.event_id}")
+                    continue
+
                 results = []
                 for frame_idx, frame in enumerate(frames_to_analyze):
                     # Build absolute image path
-                    image_path = event_frames_dir / efs.event_id / frame.path
-                    if not image_path.exists():
-                        # Try alternative path structure
-                        for subdir in event_frames_dir.iterdir():
-                            if subdir.is_dir() and efs.event_id in subdir.name:
-                                image_path = subdir / frame.path
-                                break
+                    image_path = event_source_dir / frame.path
 
                     # Build frame metadata
                     frame_meta = FrameMeta(

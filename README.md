@@ -170,19 +170,19 @@ After transcription, extract events from the transcript:
 
 ```bash
 # Basic rule-based extraction
-uv run inf3-extract-events --transcript outputs/video.json
+uv run inf3-extract-events --transcript outputs/inspection.json
 
 # OpenAI LLM extraction
-uv run inf3-extract-events --transcript outputs/video.json --engine openai
+uv run --env-file .env inf3-extract-events --transcript outputs/inspection.json --engine openai
 
 # Gemini LLM extraction
-uv run inf3-extract-events --transcript outputs/video.json --engine gemini
+uv run --env-file .env inf3-extract-events --transcript outputs/inspection.json --engine gemini
 
 # Combined: LLM + rules with correlation
-uv run inf3-extract-events --transcript outputs/video.json --engine openai --include-rules
+uv run --env-file .env inf3-extract-events --transcript outputs/inspection.json --engine openai --include-rules
 
 # Custom confidence threshold
-uv run inf3-extract-events --transcript outputs/video.json --min-confidence 0.5
+uv run inf3-extract-events --transcript outputs/inspection.json --min-confidence 0.5
 ```
 
 ### Python API
@@ -280,13 +280,13 @@ Extract video frames for each event's time window:
 
 ```bash
 # Extract 5 frames per event (default)
-uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json
+uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json
 
 # Extract 10 frames per event
-uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json --n 10
+uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json --n 10
 
 # Use fixed FPS sampling (2 FPS, max 20 frames)
-uv run inf3-extract-event-frames --video inspection.mp4 --events outputs/events.json --policy fps --fps 2 --max-frames 20
+uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json --policy fps --fps 2 --max-frames 20
 ```
 
 ### Output Structure
