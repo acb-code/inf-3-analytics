@@ -1,6 +1,7 @@
 # manually added to ignore
 *.MOV
 outputs/
+.inf3-analytics/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

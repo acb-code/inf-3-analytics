@@ -12,9 +12,14 @@ from inf3_analytics.api.registry import RunRegistry
 
 
 @lru_cache
+def _registry_for_path(registry_path: Path) -> RunRegistry:
+    """Cache a registry per path (Path is hashable)."""
+    return RunRegistry(registry_path)
+
+
 def get_registry(settings: Annotated[Settings, Depends(get_settings)]) -> RunRegistry:
     """Get cached registry instance."""
-    return RunRegistry(settings.inf3_registry_path)
+    return _registry_for_path(settings.inf3_registry_path)
 
 
 def validate_path_security(path: Path, settings: Settings) -> None:
