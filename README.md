@@ -502,6 +502,82 @@ Options:
   --dry-run               Show what would be processed without API calls
 ```
 
+## REST API
+
+The pipeline includes a FastAPI-based REST API for managing runs and retrieving artifacts.
+
+### Starting the Server
+
+```bash
+# Start the API server (default: http://0.0.0.0:8000)
+uv run python -m inf3_analytics.api
+
+# With uvicorn options
+uv run uvicorn inf3_analytics.api.app:app --reload --port 8000
+```
+
+### Configuration
+
+Configure via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INF3_DATA_ROOT` | Current directory | Root path for security validation |
+| `INF3_REGISTRY_PATH` | `.inf3-analytics/registry.json` | Path to run registry file |
+| `INF3_CORS_ORIGINS` | `["http://localhost:3000", "http://localhost:8080"]` | Allowed CORS origins |
+
+### API Endpoints
+
+#### Runs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/runs` | Register a new pipeline run |
+| `GET` | `/runs` | List all registered runs |
+| `GET` | `/runs/{run_id}` | Get run details and available artifacts |
+
+#### Artifacts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/runs/{run_id}/artifacts/transcript` | Get transcript JSON |
+| `GET` | `/runs/{run_id}/artifacts/events` | Get events JSON |
+| `GET` | `/runs/{run_id}/artifacts/event-frames/manifest` | Get event frames manifest |
+| `GET` | `/runs/{run_id}/artifacts/frame-analytics/manifest` | Get frame analytics manifest |
+
+#### Video Streaming
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/runs/{run_id}/video` | Stream video with HTTP Range support |
+
+### Example Usage
+
+```bash
+# Create a new run
+curl -X POST http://localhost:8000/runs \
+  -H "Content-Type: application/json" \
+  -d '{"video_path": "/path/to/video.mp4", "run_root": "/path/to/outputs"}'
+
+# List all runs
+curl http://localhost:8000/runs
+
+# Get run details with artifact availability
+curl http://localhost:8000/runs/{run_id}
+
+# Fetch transcript
+curl http://localhost:8000/runs/{run_id}/artifacts/transcript
+
+# Fetch events
+curl http://localhost:8000/runs/{run_id}/artifacts/events
+```
+
+### OpenAPI Documentation
+
+When the server is running, interactive API docs are available at:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
 ## Development
 
 ```bash
