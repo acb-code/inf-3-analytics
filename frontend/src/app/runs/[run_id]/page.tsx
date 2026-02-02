@@ -3,9 +3,10 @@
 import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { RunDetailResponse, Event } from "@/types/api";
+import type { RunDetailResponse, Event, EventFrameSet } from "@/types/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { EventList } from "@/components/EventList";
+import { EventFrameViewer } from "@/components/EventFrameViewer";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 interface PageProps {
@@ -16,16 +17,23 @@ export default function RunDetailPage({ params }: PageProps) {
   const { run_id } = use(params);
   const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventFrameSets, setEventFrameSets] = useState<EventFrameSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [selectedFrameSet, setSelectedFrameSet] = useState<EventFrameSet | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    Promise.all([api.getRun(run_id), api.getEvents(run_id).catch(() => ({ events: [] }))])
-      .then(([runData, eventsData]) => {
+    Promise.all([
+      api.getRun(run_id),
+      api.getEvents(run_id).catch(() => ({ events: [] })),
+      api.getEventFramesManifest(run_id).catch(() => ({ event_frame_sets: [] })),
+    ])
+      .then(([runData, eventsData, framesManifest]) => {
         setRunDetail(runData);
         setEvents(eventsData.events || []);
+        setEventFrameSets(framesManifest.event_frame_sets || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -39,6 +47,10 @@ export default function RunDetailPage({ params }: PageProps) {
       videoRef.current.currentTime = event.start_s;
       videoRef.current.play();
     }
+  };
+
+  const handleViewFrames = (_event: Event, frameSet: EventFrameSet) => {
+    setSelectedFrameSet(frameSet);
   };
 
   if (loading) {
@@ -107,11 +119,26 @@ export default function RunDetailPage({ params }: PageProps) {
             <EventList
               events={events}
               currentTime={currentTime}
+              eventFrameSets={eventFrameSets}
               onEventClick={handleEventClick}
+              onViewFrames={handleViewFrames}
             />
           </div>
         </div>
       </div>
+
+      {/* Frame viewer modal */}
+      {selectedFrameSet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="h-[90vh] w-[95vw] max-w-7xl overflow-hidden rounded-lg">
+            <EventFrameViewer
+              runId={run_id}
+              eventFrameSet={selectedFrameSet}
+              onClose={() => setSelectedFrameSet(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,14 +9,21 @@ import {
 interface EventCardProps {
   event: Event;
   isActive: boolean;
+  hasFrames?: boolean;
   onClick: () => void;
+  onViewFrames?: () => void;
 }
 
-export function EventCard({ event, isActive, onClick }: EventCardProps) {
+export function EventCard({
+  event,
+  isActive,
+  hasFrames,
+  onClick,
+  onViewFrames,
+}: EventCardProps) {
   return (
-    <button
-      onClick={onClick}
-      className={`w-full rounded-lg border p-3 text-left transition-all ${
+    <div
+      className={`rounded-lg border p-3 transition-all ${
         isActive
           ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
           : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
@@ -53,6 +60,30 @@ export function EventCard({ event, isActive, onClick }: EventCardProps) {
           "{event.transcript_ref.excerpt}"
         </p>
       )}
-    </button>
+
+      {/* Action buttons */}
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={onClick}
+          className="flex-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+        >
+          Go to time
+        </button>
+        {hasFrames && onViewFrames && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewFrames();
+            }}
+            className="flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
+          >
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            View Frames
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
