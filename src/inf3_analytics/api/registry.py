@@ -63,13 +63,15 @@ class RunRegistry:
             if run_id is None:
                 run_id = self._generate_run_id()
 
-            video_basename = Path(video_path).stem
+            resolved_video_path = Path(video_path).resolve()
+            resolved_run_root = Path(run_root).resolve()
+            video_basename = resolved_video_path.stem
             now = datetime.now(UTC)
 
             run_data = {
                 "run_id": run_id,
-                "video_path": video_path,
-                "run_root": run_root,
+                "video_path": str(resolved_video_path),
+                "run_root": str(resolved_run_root),
                 "video_basename": video_basename,
                 "status": RunStatus.CREATED.value,
                 "created_at": now.isoformat(),
@@ -80,8 +82,8 @@ class RunRegistry:
 
             return RunMetadata(
                 run_id=run_id,
-                video_path=video_path,
-                run_root=run_root,
+                video_path=str(resolved_video_path),
+                run_root=str(resolved_run_root),
                 video_basename=video_basename,
                 status=RunStatus.CREATED,
                 created_at=now,
