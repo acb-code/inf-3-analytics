@@ -26,6 +26,8 @@ class EventExtractionConfig:
     llm_model: str = "gpt-5-mini"
     max_segments_per_batch: int = 20
     llm_batch_overlap: int = 1
+    max_retries: int = 2
+    retry_delay_ms: int = 1000
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
@@ -44,6 +46,14 @@ class EventExtractionConfig:
         if self.llm_batch_overlap < 0:
             raise ValueError(
                 f"Invalid llm_batch_overlap: {self.llm_batch_overlap}. Must be >= 0"
+            )
+        if self.max_retries < 0:
+            raise ValueError(
+                f"Invalid max_retries: {self.max_retries}. Must be >= 0"
+            )
+        if self.retry_delay_ms < 0:
+            raise ValueError(
+                f"Invalid retry_delay_ms: {self.retry_delay_ms}. Must be >= 0"
             )
 
 

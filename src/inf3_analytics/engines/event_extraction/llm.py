@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -563,49 +564,64 @@ class OpenAIEventEngine(BaseEventExtractionEngine):
             batch_rule_events = _filter_rule_events_for_batch(batch, rule_events)
             prompt = _build_extraction_prompt(batch, batch_rule_events)
 
-            try:
-                request_args: dict[str, Any] = {
-                    "model": self._model_name,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are an expert infrastructure inspection analyst. "
-                            "Extract significant events from transcripts and return valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                }
-                # gpt-5* models currently only accept the default temperature (1).
-                if not self._model_name.startswith("gpt-5"):
-                    request_args["temperature"] = 0.2  # Lower temperature for consistency
-                request_args["response_format"] = _openai_response_format()
-
+            last_error: Exception | None = None
+            for attempt in range(self.config.max_retries + 1):
                 try:
-                    response = self._client.chat.completions.create(**request_args)
-                except Exception as e:
-                    message = str(e).lower()
-                    if "response_format" in message or "json_schema" in message:
-                        request_args.pop("response_format", None)
+                    request_args: dict[str, Any] = {
+                        "model": self._model_name,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are an expert infrastructure inspection analyst. "
+                                "Extract significant events from transcripts and return valid JSON.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                    }
+                    # gpt-5* models currently only accept the default temperature (1).
+                    if not self._model_name.startswith("gpt-5"):
+                        request_args["temperature"] = 0.2  # Lower temperature for consistency
+                    request_args["response_format"] = _openai_response_format()
+
+                    try:
                         response = self._client.chat.completions.create(**request_args)
-                    else:
-                        raise
+                    except Exception as e:
+                        message = str(e).lower()
+                        if "response_format" in message or "json_schema" in message:
+                            request_args.pop("response_format", None)
+                            response = self._client.chat.completions.create(**request_args)
+                        else:
+                            raise
 
-                response_text = response.choices[0].message.content or ""
+                    response_text = response.choices[0].message.content or ""
 
-                events = _parse_llm_response(
-                    response_text,
-                    batch,
-                    f"openai/{self._model_name}",
-                    self._model_name,
-                    str(transcript.metadata.source_video)
-                    if transcript.metadata.source_video
-                    else None,
-                    batch_rule_events,
-                )
-                all_events.extend(events)
+                    events = _parse_llm_response(
+                        response_text,
+                        batch,
+                        f"openai/{self._model_name}",
+                        self._model_name,
+                        str(transcript.metadata.source_video)
+                        if transcript.metadata.source_video
+                        else None,
+                        batch_rule_events,
+                    )
+                    all_events.extend(events)
+                    last_error = None
+                    break
 
-            except Exception as e:
-                raise APIError(f"OpenAI API call failed: {e}") from e
+                except Exception as e:
+                    last_error = e
+                    LOGGER.warning(
+                        "OpenAI API call failed (attempt %d/%d): %s",
+                        attempt + 1,
+                        self.config.max_retries + 1,
+                        e,
+                    )
+                    if attempt < self.config.max_retries:
+                        time.sleep(self.config.retry_delay_ms / 1000)
+
+            if last_error is not None and attempt >= self.config.max_retries:
+                raise APIError(f"OpenAI API call failed: {last_error}") from last_error
 
         # Deduplicate across overlapping batches and attach correlations
         all_events = _dedupe_events(all_events)
@@ -707,42 +723,57 @@ class GeminiEventEngine(BaseEventExtractionEngine):
             batch_rule_events = _filter_rule_events_for_batch(batch, rule_events)
             prompt = _build_extraction_prompt(batch, batch_rule_events)
 
-            try:
+            last_error: Exception | None = None
+            for attempt in range(self.config.max_retries + 1):
                 try:
-                    response = self._client.models.generate_content(
-                        model=self._model_name,
-                        contents=prompt,
-                        generation_config={
-                            "response_mime_type": "application/json",
-                            "temperature": 0.2,
-                        },
-                    )
-                except Exception as e:
-                    message = str(e).lower()
-                    if "response_mime_type" in message or "generation_config" in message:
+                    try:
                         response = self._client.models.generate_content(
                             model=self._model_name,
                             contents=prompt,
+                            generation_config={
+                                "response_mime_type": "application/json",
+                                "temperature": 0.2,
+                            },
                         )
-                    else:
-                        raise
+                    except Exception as e:
+                        message = str(e).lower()
+                        if "response_mime_type" in message or "generation_config" in message:
+                            response = self._client.models.generate_content(
+                                model=self._model_name,
+                                contents=prompt,
+                            )
+                        else:
+                            raise
 
-                response_text = response.text or ""
+                    response_text = response.text or ""
 
-                events = _parse_llm_response(
-                    response_text,
-                    batch,
-                    f"gemini/{self._model_name}",
-                    self._model_name,
-                    str(transcript.metadata.source_video)
-                    if transcript.metadata.source_video
-                    else None,
-                    batch_rule_events,
-                )
-                all_events.extend(events)
+                    events = _parse_llm_response(
+                        response_text,
+                        batch,
+                        f"gemini/{self._model_name}",
+                        self._model_name,
+                        str(transcript.metadata.source_video)
+                        if transcript.metadata.source_video
+                        else None,
+                        batch_rule_events,
+                    )
+                    all_events.extend(events)
+                    last_error = None
+                    break
 
-            except Exception as e:
-                raise APIError(f"Gemini API call failed: {e}") from e
+                except Exception as e:
+                    last_error = e
+                    LOGGER.warning(
+                        "Gemini API call failed (attempt %d/%d): %s",
+                        attempt + 1,
+                        self.config.max_retries + 1,
+                        e,
+                    )
+                    if attempt < self.config.max_retries:
+                        time.sleep(self.config.retry_delay_ms / 1000)
+
+            if last_error is not None and attempt >= self.config.max_retries:
+                raise APIError(f"Gemini API call failed: {last_error}") from last_error
 
         # Deduplicate across overlapping batches and attach correlations
         all_events = _dedupe_events(all_events)

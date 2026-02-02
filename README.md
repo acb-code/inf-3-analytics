@@ -303,13 +303,13 @@ Extract video frames for each event's time window:
 
 ```bash
 # Extract 5 frames per event (default)
-uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json
+uv run inf3-extract-event-frames --video data/inspection.MOV --events outputs/inspection_events.json
 
 # Extract 10 frames per event
-uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json --n 10
+uv run inf3-extract-event-frames --video data/inspection.MOV --events outputs/inspection_events.json --n 10
 
 # Use fixed FPS sampling (2 FPS, max 20 frames)
-uv run inf3-extract-event-frames --video inspection.MOV --events outputs/events.json --policy fps --fps 2 --max-frames 20
+uv run inf3-extract-event-frames --video data/inspection.MOV --events outputs/inspection_events.json --policy fps --fps 2 --max-frames 20
 ```
 
 ### Output Structure
