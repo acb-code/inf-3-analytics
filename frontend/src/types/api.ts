@@ -1,89 +1,86 @@
-// Event types matching backend EventType enum
+// Run status
+export type RunStatus = "created" | "running" | "completed" | "failed";
+
+// Artifact types
+export type ArtifactType =
+  | "transcript"
+  | "events"
+  | "event_frames_manifest"
+  | "frame_analytics_manifest";
+
+// Event types matching backend
 export type EventType =
   | "structural_anomaly"
-  | "material_defect"
-  | "safety_hazard"
-  | "maintenance_issue"
-  | "environmental"
-  | "equipment"
-  | "observation"
-  | "location_marker"
+  | "safety_risk"
+  | "maintenance_note"
   | "measurement"
+  | "location_reference"
+  | "uncertainty"
+  | "observation"
   | "other";
 
 // Severity levels
 export type Severity = "low" | "medium" | "high";
 
-// Run status
-export type RunStatus = "pending" | "processing" | "completed" | "failed";
-
-// Transcript reference for an event
-export interface TranscriptReference {
-  text: string;
-  start_s: number;
-  end_s: number;
+// Transcript reference within an event
+export interface TranscriptRef {
+  segment_ids: number[];
+  excerpt: string;
+  keywords: string[];
 }
 
-// Single event from the event list
+// Single event from the events JSON
 export interface Event {
   event_id: string;
   event_type: EventType;
-  title: string;
-  summary: string;
-  severity: Severity;
+  severity: Severity | null;
+  confidence: number;
   start_s: number;
   end_s: number;
   start_ts: string;
   end_ts: string;
-  transcript_refs: TranscriptReference[];
-  keywords: string[];
-  confidence: number;
-  engine: string;
+  title: string;
+  summary: string;
+  transcript_ref: TranscriptRef;
+  suggested_actions: string[];
+  metadata: {
+    extractor_engine: string;
+    extractor_version: string;
+    created_at: string;
+    source_transcript_path: string;
+  };
+  related_rule_events: unknown | null;
 }
 
-// Event list response
-export interface EventList {
-  run_id: string;
+// Response from GET /runs/{run_id}/artifacts/events
+export interface EventsResponse {
   events: Event[];
-  engine_info: {
-    name: string;
-    version: string;
-  };
 }
 
 // Artifact availability info
 export interface ArtifactInfo {
+  type: ArtifactType;
   available: boolean;
-  path?: string;
-  count?: number;
+  url: string | null;
 }
 
-// Run metadata for list view
+// Run metadata
 export interface RunMetadata {
   run_id: string;
+  video_path: string;
+  run_root: string;
+  video_basename: string;
   status: RunStatus;
   created_at: string;
-  video_filename?: string;
-  duration_s?: number;
 }
 
 // Response from GET /runs
 export interface RunListResponse {
   runs: RunMetadata[];
-  total: number;
 }
 
 // Response from GET /runs/{run_id}
 export interface RunDetailResponse {
-  run_id: string;
-  status: RunStatus;
-  created_at: string;
-  video_filename?: string;
-  duration_s?: number;
-  artifacts: {
-    transcript: ArtifactInfo;
-    events: ArtifactInfo;
-    frames: ArtifactInfo;
-    frame_analytics: ArtifactInfo;
-  };
+  run: RunMetadata;
+  artifacts: ArtifactInfo[];
 }

@@ -32,11 +32,13 @@ export function EventCard({ event, isActive, onClick }: EventCardProps) {
         >
           {formatEventType(event.event_type)}
         </span>
-        <span
-          className={`rounded border px-1.5 py-0.5 text-xs font-medium capitalize ${getSeverityColor(event.severity)}`}
-        >
-          {event.severity}
-        </span>
+        {event.severity && (
+          <span
+            className={`rounded border px-1.5 py-0.5 text-xs font-medium capitalize ${getSeverityColor(event.severity)}`}
+          >
+            {event.severity}
+          </span>
+        )}
       </div>
 
       {/* Title */}
@@ -46,9 +48,9 @@ export function EventCard({ event, isActive, onClick }: EventCardProps) {
       <p className="mb-2 text-xs text-gray-600 line-clamp-2">{event.summary}</p>
 
       {/* Transcript excerpt */}
-      {event.transcript_refs.length > 0 && (
+      {event.transcript_ref?.excerpt && (
         <p className="border-l-2 border-gray-300 pl-2 text-xs italic text-gray-500 line-clamp-2">
-          "{event.transcript_refs[0].text}"
+          "{event.transcript_ref.excerpt}"
         </p>
       )}
     </button>

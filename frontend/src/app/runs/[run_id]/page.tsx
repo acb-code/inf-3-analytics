@@ -14,7 +14,7 @@ interface PageProps {
 
 export default function RunDetailPage({ params }: PageProps) {
   const { run_id } = use(params);
-  const [run, setRun] = useState<RunDetailResponse | null>(null);
+  const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function RunDetailPage({ params }: PageProps) {
   useEffect(() => {
     Promise.all([api.getRun(run_id), api.getEvents(run_id).catch(() => ({ events: [] }))])
       .then(([runData, eventsData]) => {
-        setRun(runData);
+        setRunDetail(runData);
         setEvents(eventsData.events || []);
         setLoading(false);
       })
@@ -49,7 +49,7 @@ export default function RunDetailPage({ params }: PageProps) {
     );
   }
 
-  if (error || !run) {
+  if (error || !runDetail) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
@@ -62,6 +62,8 @@ export default function RunDetailPage({ params }: PageProps) {
       </div>
     );
   }
+
+  const { run } = runDetail;
 
   return (
     <div className="flex h-screen flex-col">
@@ -76,11 +78,9 @@ export default function RunDetailPage({ params }: PageProps) {
           </Link>
           <div>
             <h1 className="font-mono text-lg font-medium text-gray-900">
-              {run.run_id.slice(0, 12)}...
+              {run.run_id}
             </h1>
-            {run.video_filename && (
-              <p className="text-sm text-gray-500">{run.video_filename}</p>
-            )}
+            <p className="text-sm text-gray-500">{run.video_basename}</p>
           </div>
         </div>
       </header>
