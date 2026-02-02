@@ -185,17 +185,21 @@ export default function RunDetailPage({ params }: PageProps) {
             >
               {showPipeline ? "Hide Pipeline" : "Show Pipeline"}
             </button>
-            <button
-              onClick={handleStartPipeline}
-              disabled={isAnyStepRunning}
-              className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
-                isAnyStepRunning
-                  ? "cursor-not-allowed bg-gray-400"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              Run All Steps
-            </button>
+            {isAnyStepRunning ? (
+              <button
+                onClick={handleCancelPipeline}
+                className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Cancel Pipeline
+              </button>
+            ) : (
+              <button
+                onClick={handleStartPipeline}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Run All Steps
+              </button>
+            )}
           </div>
         </div>
       </header>

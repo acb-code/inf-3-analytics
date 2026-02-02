@@ -205,3 +205,37 @@ def test_legacy_run_gets_steps_initialized(
     assert response.status_code == 200
     data = response.json()
     assert len(data["steps"]) == 4
+
+
+def test_cancel_pipeline_not_running(client: TestClient, uploaded_run: dict) -> None:
+    """Test cancelling a pipeline that isn't running returns an error."""
+    run_id = uploaded_run["run_id"]
+
+    response = client.post(f"/runs/{run_id}/pipeline/cancel")
+
+    assert response.status_code == 400
+    assert "not running" in response.json()["detail"]
+
+
+def test_cancel_pipeline_when_running(
+    client: TestClient, uploaded_run: dict, test_registry
+) -> None:
+    """Test cancelling a running pipeline."""
+    from inf3_analytics.api.models import RunStatus
+
+    run_id = uploaded_run["run_id"]
+
+    # Mark run as running and a step as running
+    test_registry.update_status(run_id, RunStatus.RUNNING)
+    test_registry.update_step_status(
+        run_id, PipelineStep.TRANSCRIBE, StepStatus.RUNNING
+    )
+
+    # Mock the cancel_pipeline function
+    with patch("inf3_analytics.api.routes.pipeline.cancel_pipeline", return_value=True):
+        response = client.post(f"/runs/{run_id}/pipeline/cancel")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "cancelled" in data["message"].lower() or "Pipeline cancelled" in data["message"]
+    assert data["run_id"] == run_id
