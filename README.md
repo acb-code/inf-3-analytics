@@ -255,6 +255,29 @@ for event in llm_events:
 | openai | GPT-based extraction (gpt-5-mini default) | OPENAI_API_KEY |
 | gemini | Gemini-based extraction (gemini-3-flash-preview default) | GEMINI_API_KEY |
 
+### LLM Smoke Tests (examples/)
+
+Quick scripts that validate `.env` loading and model connectivity (direct API only).
+
+```bash
+# Install provider SDKs
+uv sync --extra openai
+uv sync --extra gemini
+
+# OpenAI smoke test (direct API)
+uv run python examples/llm_openai_smoke.py
+
+# Gemini smoke test (direct API)
+uv run python examples/llm_gemini_smoke.py
+```
+
+Make sure `.env` includes the relevant API keys:
+
+```bash
+OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
+```
+
 ### Event Output Formats
 
 | Format | Description |
