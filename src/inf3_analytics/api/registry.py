@@ -1,6 +1,7 @@
-"""JSON file-backed run registry."""
+"""SQLite-backed run registry."""
 
 import json
+import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,37 +10,96 @@ from typing import Any
 
 from inf3_analytics.api.models import RunMetadata, RunStatus
 
+SQLITE_HEADER = b"SQLite format 3\x00"
+
 
 class RunRegistry:
-    """Thread-safe JSON file registry for pipeline runs."""
+    """Thread-safe SQLite registry for pipeline runs."""
 
     def __init__(self, registry_path: Path) -> None:
         """Initialize the registry.
 
         Args:
-            registry_path: Path to the JSON registry file
+            registry_path: Path to the SQLite registry file
         """
         self._path = registry_path
         self._lock = Lock()
-
-    def _load(self) -> dict[str, Any]:
-        """Load registry data from file."""
-        if not self._path.exists():
-            return {"runs": {}}
-        with open(self._path, encoding="utf-8") as f:
-            return json.load(f)  # type: ignore[no-any-return]
-
-    def _save(self, data: dict[str, Any]) -> None:
-        """Save registry data to file."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, default=str)
+        self._migrate_json_if_needed()
+        self._init_db()
 
-    def _generate_run_id(self) -> str:
-        """Generate a unique run ID."""
-        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        short_uuid = uuid.uuid4().hex[:8]
-        return f"run_{timestamp}_{short_uuid}"
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self._path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    video_path TEXT NOT NULL,
+                    run_root TEXT NOT NULL,
+                    video_basename TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def _is_sqlite_file(self) -> bool:
+        if not self._path.exists():
+            return False
+        try:
+            with open(self._path, "rb") as f:
+                header = f.read(len(SQLITE_HEADER))
+            return header == SQLITE_HEADER
+        except OSError:
+            return False
+
+    def _migrate_json_if_needed(self) -> None:
+        if not self._path.exists():
+            return
+        if self._is_sqlite_file():
+            return
+
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+
+        runs = data.get("runs")
+        if not isinstance(runs, dict):
+            return
+
+        backup_path = self._path.with_suffix(
+            self._path.suffix + f".bak-{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+        )
+        self._path.replace(backup_path)
+        self._init_db()
+
+        with self._connect() as conn:
+            for run_data in runs.values():
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO runs
+                        (run_id, video_path, run_root, video_basename, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run_data["run_id"],
+                            run_data["video_path"],
+                            run_data["run_root"],
+                            run_data["video_basename"],
+                            run_data["status"],
+                            run_data["created_at"],
+                        ),
+                    )
+                except KeyError:
+                    continue
 
     def create_run(
         self,
@@ -58,8 +118,6 @@ class RunRegistry:
             RunMetadata for the created run
         """
         with self._lock:
-            data = self._load()
-
             if run_id is None:
                 run_id = self._generate_run_id()
 
@@ -77,8 +135,22 @@ class RunRegistry:
                 "created_at": now.isoformat(),
             }
 
-            data["runs"][run_id] = run_data
-            self._save(data)
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO runs
+                    (run_id, video_path, run_root, video_basename, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_data["run_id"],
+                        run_data["video_path"],
+                        run_data["run_root"],
+                        run_data["video_basename"],
+                        run_data["status"],
+                        run_data["created_at"],
+                    ),
+                )
 
             return RunMetadata(
                 run_id=run_id,
@@ -99,17 +171,20 @@ class RunRegistry:
             RunMetadata if found, None otherwise
         """
         with self._lock:
-            data = self._load()
-            run_data = data["runs"].get(run_id)
-            if run_data is None:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT * FROM runs WHERE run_id = ?",
+                    (run_id,),
+                ).fetchone()
+            if row is None:
                 return None
             return RunMetadata(
-                run_id=run_data["run_id"],
-                video_path=run_data["video_path"],
-                run_root=run_data["run_root"],
-                video_basename=run_data["video_basename"],
-                status=RunStatus(run_data["status"]),
-                created_at=datetime.fromisoformat(run_data["created_at"]),
+                run_id=row["run_id"],
+                video_path=row["video_path"],
+                run_root=row["run_root"],
+                video_basename=row["video_basename"],
+                status=RunStatus(row["status"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
             )
 
     def list_runs(self) -> list[RunMetadata]:
@@ -119,20 +194,21 @@ class RunRegistry:
             List of RunMetadata for all runs
         """
         with self._lock:
-            data = self._load()
-            runs = []
-            for run_data in data["runs"].values():
-                runs.append(
-                    RunMetadata(
-                        run_id=run_data["run_id"],
-                        video_path=run_data["video_path"],
-                        run_root=run_data["run_root"],
-                        video_basename=run_data["video_basename"],
-                        status=RunStatus(run_data["status"]),
-                        created_at=datetime.fromisoformat(run_data["created_at"]),
-                    )
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM runs ORDER BY created_at DESC"
+                ).fetchall()
+            return [
+                RunMetadata(
+                    run_id=row["run_id"],
+                    video_path=row["video_path"],
+                    run_root=row["run_root"],
+                    video_basename=row["video_basename"],
+                    status=RunStatus(row["status"]),
+                    created_at=datetime.fromisoformat(row["created_at"]),
                 )
-            return sorted(runs, key=lambda r: r.created_at, reverse=True)
+                for row in rows
+            ]
 
     def update_status(self, run_id: str, status: RunStatus) -> bool:
         """Update the status of a run.
@@ -145,9 +221,15 @@ class RunRegistry:
             True if updated, False if run not found
         """
         with self._lock:
-            data = self._load()
-            if run_id not in data["runs"]:
-                return False
-            data["runs"][run_id]["status"] = status.value
-            self._save(data)
-            return True
+            with self._connect() as conn:
+                cur = conn.execute(
+                    "UPDATE runs SET status = ? WHERE run_id = ?",
+                    (status.value, run_id),
+                )
+                return cur.rowcount > 0
+
+    def _generate_run_id(self) -> str:
+        """Generate a unique run ID."""
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        short_uuid = uuid.uuid4().hex[:8]
+        return f"run_{timestamp}_{short_uuid}"

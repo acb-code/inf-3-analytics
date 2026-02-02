@@ -2,7 +2,81 @@
 
 Infrastructure inspection video analytics pipeline with synchronized timestamps.
 
-## Prerequisites
+## Quick Start (Gemini Pipeline + Frontend)
+
+This walks through a full AI analytics pipeline using Gemini, then runs the frontend UI.
+
+### 1) Prereqs (minimal)
+
+- Python 3.11+
+- Node.js 18+
+- [FFmpeg](https://ffmpeg.org/) on PATH
+- A sample video at `data/inspection.MOV`
+
+### 2) Install dependencies
+
+```bash
+uv sync --extra gemini --extra api
+```
+
+Available extras:
+- `dev` (tests, lint, typing)
+- `openai` (OpenAI APIs)
+- `gemini` (Google Gemini APIs)
+- `cloud` (OpenAI + Gemini)
+- `cv` (OpenCV + NumPy)
+- `api` (FastAPI + Uvicorn)
+
+### 3) .env setup
+
+Create a `.env` file at the repo root:
+
+```bash
+GEMINI_API_KEY=your-api-key
+# Optional:
+# OPENAI_API_KEY=your-api-key
+# INF3_DATA_ROOT=/absolute/path/to/inf-3-analytics
+```
+
+### 3) Run the Gemini pipeline
+
+```bash
+# Step 1: Transcribe (Gemini)
+uv run --env-file .env inf3-transcribe --video data/inspection.MOV --out outputs --engine gemini
+
+# Step 2: Extract events (Gemini)
+uv run --env-file .env inf3-extract-events --transcript outputs/inspection.json --engine gemini
+
+# Step 3: Extract frames for each event
+uv run inf3-extract-event-frames \
+  --video data/inspection.MOV \
+  --events outputs/events/inspection_events.json
+
+# Step 4: Frame analytics (Gemini VLM)
+uv run --env-file .env inf3-frame-analytics --event-frames outputs/event_frames --out outputs/frame_analytics
+```
+
+### 4) Start API + Frontend
+
+```bash
+# API (serves artifacts + video)
+uv run python -m inf3_analytics.api
+```
+
+In another terminal:
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
+
+Then open `http://localhost:3000/runs`.
+
+---
+
+## Prerequisites (Full)
 
 - Python 3.11+
 - [FFmpeg](https://ffmpeg.org/) (required for audio extraction)
@@ -35,9 +109,7 @@ uv sync
 pip install -e ".[dev]"
 ```
 
-## Quick Start
-
-### CLI Usage
+## CLI Usage (Reference)
 
 ```bash
 # Basic transcription
@@ -56,7 +128,7 @@ uv run inf3-transcribe --video inspection.mp4 --language en
 uv run inf3-transcribe --video inspection.mp4 --format json,srt
 ```
 
-### Python API
+## Python API (Reference)
 
 ```python
 from pathlib import Path
