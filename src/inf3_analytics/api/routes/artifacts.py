@@ -9,14 +9,21 @@ from fastapi.responses import FileResponse
 
 from inf3_analytics.api.config import Settings, get_settings
 from inf3_analytics.api.dependencies import get_run_or_404, validate_path_security
-from inf3_analytics.api.models import RunMetadata
+from inf3_analytics.api.models import (
+    EventFramesManifestResponse,
+    EventsResponse,
+    FrameAnalyticsEventResponse,
+    FrameAnalyticsManifestResponse,
+    RunMetadata,
+    TranscriptResponse,
+)
 from inf3_analytics.io import read_events_json, read_json, read_manifest
 from inf3_analytics.io.analytics_writer import read_analytics_manifest
 
 router = APIRouter(prefix="/runs/{run_id}/artifacts", tags=["artifacts"])
 
 
-@router.get("/transcript")
+@router.get("/transcript", response_model=TranscriptResponse)
 def get_transcript(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -37,7 +44,7 @@ def get_transcript(
     return transcript.to_dict()
 
 
-@router.get("/events")
+@router.get("/events", response_model=EventsResponse)
 def get_events(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -58,7 +65,7 @@ def get_events(
     return events.to_dict()
 
 
-@router.get("/event-frames/manifest")
+@router.get("/event-frames/manifest", response_model=EventFramesManifestResponse)
 def get_event_frames_manifest(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -79,7 +86,7 @@ def get_event_frames_manifest(
     return manifest.to_dict()
 
 
-@router.get("/frame-analytics/manifest")
+@router.get("/frame-analytics/manifest", response_model=FrameAnalyticsManifestResponse)
 def get_frame_analytics_manifest(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -159,7 +166,7 @@ def get_event_frames_info(
         return json.load(f)
 
 
-@router.get("/frame-analytics/by-event/{event_id}")
+@router.get("/frame-analytics/by-event/{event_id}", response_model=FrameAnalyticsEventResponse)
 def get_event_frame_analyses(
     event_id: str,
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
