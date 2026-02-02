@@ -25,12 +25,14 @@ export function EventFrameViewer({
   const [frameAnalyses, setFrameAnalyses] = useState<FrameAnalysis[]>([]);
   const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Use server-provided event directory when available
   const eventDir = eventFrameSet.event_dir || getEventDirName(eventFrameSet);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     api
       .getFrameAnalytics(runId, eventFrameSet.event_id)
       .then((data) => {
@@ -38,6 +40,7 @@ export function EventFrameViewer({
         setEventSummary(data.event_summary);
       })
       .catch((err) => {
+        setError(err?.message || "Failed to load frame analytics");
         console.error("Failed to load frame analytics:", err);
       })
       .finally(() => {
@@ -179,6 +182,10 @@ export function EventFrameViewer({
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-blue-500"></div>
+              </div>
+            ) : error ? (
+              <div className="rounded border border-red-700/40 bg-red-900/30 p-3 text-xs text-red-200">
+                {error}
               </div>
             ) : currentAnalysis ? (
               <div className="space-y-4">
