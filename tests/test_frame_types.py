@@ -47,6 +47,7 @@ def sample_event_frame_set(sample_frame: Frame, sample_frame_no_dims: Frame) -> 
     return EventFrameSet(
         event_id="evt_000",
         event_title="Structural anomaly detected",
+        event_dir="evt_000_structural",
         start_s=434.0,
         end_s=440.0,
         start_ts="00:07:14,000",
@@ -133,6 +134,7 @@ class TestEventFrameSetRoundtrip:
         d = sample_event_frame_set.to_dict()
         assert d["event_id"] == "evt_000"
         assert d["event_title"] == "Structural anomaly detected"
+        assert d["event_dir"] == "evt_000_structural"
         assert d["start_s"] == 434.0
         assert d["end_s"] == 440.0
         assert d["status"] == "success"
@@ -145,6 +147,7 @@ class TestEventFrameSetRoundtrip:
         restored = EventFrameSet.from_dict(d)
         assert restored.event_id == sample_event_frame_set.event_id
         assert restored.event_title == sample_event_frame_set.event_title
+        assert restored.event_dir == sample_event_frame_set.event_dir
         assert restored.start_s == sample_event_frame_set.start_s
         assert restored.end_s == sample_event_frame_set.end_s
         assert restored.status == sample_event_frame_set.status
@@ -155,6 +158,7 @@ class TestEventFrameSetRoundtrip:
         efs = EventFrameSet(
             event_id="evt_001",
             event_title="Failed event",
+            event_dir=None,
             start_s=100.0,
             end_s=110.0,
             start_ts="00:01:40,000",

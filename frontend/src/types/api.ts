@@ -100,6 +100,7 @@ export interface EventFrame {
 export interface EventFrameSet {
   event_id: string;
   event_title: string;
+  event_dir?: string | null;
   start_s: number;
   end_s: number;
   start_ts: string;

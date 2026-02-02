@@ -103,6 +103,8 @@ def extract_event_frames(
         if progress_callback:
             progress_callback(event, idx, len(events))
 
+        event_dir_name = _create_event_dir_name(event)
+
         # Compute timestamps for this event
         timestamps = policy.compute_timestamps(
             event.start_s, event.end_s, video_info.duration_s
@@ -113,6 +115,7 @@ def extract_event_frames(
             event_frame_set = EventFrameSet(
                 event_id=event.event_id,
                 event_title=event.title,
+                event_dir=event_dir_name,
                 start_s=event.start_s,
                 end_s=event.end_s,
                 start_ts=event.start_ts,
@@ -126,7 +129,6 @@ def extract_event_frames(
             continue
 
         # Create event directory
-        event_dir_name = _create_event_dir_name(event)
         event_dir = output_dir / event_dir_name
         frames_dir = event_dir / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
@@ -181,6 +183,7 @@ def extract_event_frames(
         event_frame_set = EventFrameSet(
             event_id=event.event_id,
             event_title=event.title,
+            event_dir=event_dir_name,
             start_s=event.start_s,
             end_s=event.end_s,
             start_ts=event.start_ts,

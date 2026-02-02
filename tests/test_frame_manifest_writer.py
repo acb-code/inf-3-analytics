@@ -39,6 +39,7 @@ def sample_event_frame_set(sample_frame: Frame) -> EventFrameSet:
     return EventFrameSet(
         event_id="evt_000",
         event_title="Structural anomaly detected",
+        event_dir="evt_000_structural",
         start_s=434.0,
         end_s=440.0,
         start_ts="00:07:14,000",
@@ -130,6 +131,7 @@ class TestManifestIO:
         ):
             assert loaded_efs.event_id == orig.event_id
             assert loaded_efs.event_title == orig.event_title
+            assert loaded_efs.event_dir == orig.event_dir
             assert loaded_efs.start_s == orig.start_s
             assert loaded_efs.end_s == orig.end_s
             assert loaded_efs.status == orig.status
@@ -179,6 +181,7 @@ class TestEventFramesJsonIO:
 
         assert loaded.event_id == sample_event_frame_set.event_id
         assert loaded.event_title == sample_event_frame_set.event_title
+        assert loaded.event_dir == sample_event_frame_set.event_dir
         assert loaded.start_s == sample_event_frame_set.start_s
         assert loaded.end_s == sample_event_frame_set.end_s
         assert loaded.status == sample_event_frame_set.status
@@ -218,6 +221,7 @@ class TestEventFramesJsonIO:
         event_frame_set = EventFrameSet(
             event_id="evt_001",
             event_title="Failed extraction",
+            event_dir=None,
             start_s=100.0,
             end_s=110.0,
             start_ts="00:01:40,000",
@@ -240,6 +244,7 @@ class TestEventFramesJsonIO:
         event_frame_set = EventFrameSet(
             event_id="evt_002",
             event_title="Partial extraction",
+            event_dir="evt_002_partial",
             start_s=200.0,
             end_s=210.0,
             start_ts="00:03:20,000",

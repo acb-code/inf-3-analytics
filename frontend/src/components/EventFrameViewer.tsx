@@ -26,8 +26,8 @@ export function EventFrameViewer({
   const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Derive the event directory name for serving frame images
-  const eventDir = getEventDirName(eventFrameSet);
+  // Use server-provided event directory when available
+  const eventDir = eventFrameSet.event_dir || getEventDirName(eventFrameSet);
 
   useEffect(() => {
     setLoading(true);

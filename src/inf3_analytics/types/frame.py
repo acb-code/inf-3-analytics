@@ -63,6 +63,7 @@ class EventFrameSet:
 
     event_id: str
     event_title: str
+    event_dir: str | None
     start_s: float
     end_s: float
     start_ts: str
@@ -76,6 +77,7 @@ class EventFrameSet:
         return {
             "event_id": self.event_id,
             "event_title": self.event_title,
+            "event_dir": self.event_dir,
             "start_s": self.start_s,
             "end_s": self.end_s,
             "start_ts": self.start_ts,
@@ -95,6 +97,7 @@ class EventFrameSet:
         return cls(
             event_id=str(data["event_id"]),
             event_title=str(data["event_title"]),
+            event_dir=str(data["event_dir"]) if data.get("event_dir") else None,
             start_s=float(data["start_s"]),
             end_s=float(data["end_s"]),
             start_ts=str(data["start_ts"]),
