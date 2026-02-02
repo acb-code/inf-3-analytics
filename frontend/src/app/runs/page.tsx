@@ -12,16 +12,19 @@ export default function RunsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     api
-      .listRuns()
+      .listRuns({ signal: controller.signal })
       .then((data) => {
         setRuns(data.runs);
         setLoading(false);
       })
       .catch((err) => {
+        if (err?.name === "AbortError") return;
         setError(err.message);
         setLoading(false);
       });
+    return () => controller.abort();
   }, []);
 
   if (loading) {

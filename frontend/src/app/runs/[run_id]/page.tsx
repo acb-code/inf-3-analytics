@@ -25,10 +25,13 @@ export default function RunDetailPage({ params }: PageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([
-      api.getRun(run_id),
-      api.getEvents(run_id).catch(() => ({ events: [] })),
-      api.getEventFramesManifest(run_id).catch(() => ({ event_frame_sets: [] })),
+      api.getRun(run_id, { signal: controller.signal }),
+      api.getEvents(run_id, { signal: controller.signal }).catch(() => ({ events: [] })),
+      api
+        .getEventFramesManifest(run_id, { signal: controller.signal })
+        .catch(() => ({ event_frame_sets: [] })),
     ])
       .then(([runData, eventsData, framesManifest]) => {
         setRunDetail(runData);
@@ -37,9 +40,11 @@ export default function RunDetailPage({ params }: PageProps) {
         setLoading(false);
       })
       .catch((err) => {
+        if (err?.name === "AbortError") return;
         setError(err.message);
         setLoading(false);
       });
+    return () => controller.abort();
   }, [run_id]);
 
   const handleEventClick = (event: Event) => {

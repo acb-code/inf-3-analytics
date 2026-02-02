@@ -31,21 +31,24 @@ export function EventFrameViewer({
   const eventDir = eventFrameSet.event_dir || getEventDirName(eventFrameSet);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     api
-      .getFrameAnalytics(runId, eventFrameSet.event_id)
+      .getFrameAnalytics(runId, eventFrameSet.event_id, { signal: controller.signal })
       .then((data) => {
         setFrameAnalyses(data.frame_analyses);
         setEventSummary(data.event_summary);
       })
       .catch((err) => {
+        if (err?.name === "AbortError") return;
         setError(err?.message || "Failed to load frame analytics");
         console.error("Failed to load frame analytics:", err);
       })
       .finally(() => {
         setLoading(false);
       });
+    return () => controller.abort();
   }, [runId, eventFrameSet.event_id]);
 
   const currentFrame = eventFrameSet.frames[currentIndex];
