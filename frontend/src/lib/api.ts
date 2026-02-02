@@ -4,6 +4,10 @@ import type {
   EventsResponse,
   EventFramesManifest,
   FrameAnalyticsResponse,
+  PipelineStatusResponse,
+  UploadResponse,
+  TriggerPipelineRequest,
+  PipelineStep,
 } from "@/types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_INF3_API_BASE || "http://localhost:8000";
@@ -52,4 +56,94 @@ export const api = {
       `/runs/${runId}/artifacts/frame-analytics/by-event/${eventId}`,
       options
     ),
+
+  // Upload
+  uploadVideo: async (
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<UploadResponse> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          onProgress(percent);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error("Invalid response"));
+          }
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText);
+            reject(new Error(error.detail || `Upload failed: ${xhr.status}`));
+          } catch {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+      xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
+
+      xhr.open("POST", `${API_BASE}/upload`);
+      xhr.send(formData);
+    });
+  },
+
+  // Pipeline
+  getPipelineStatus: (runId: string, options?: FetchOptions) =>
+    fetchJson<PipelineStatusResponse>(`/runs/${runId}/pipeline/status`, options),
+
+  startPipeline: async (
+    runId: string,
+    request?: TriggerPipelineRequest
+  ): Promise<{ message: string; run_id: string; status_url: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/pipeline/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request || {}),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to start pipeline: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  runPipelineStep: async (
+    runId: string,
+    stepName: PipelineStep,
+    request?: TriggerPipelineRequest
+  ): Promise<{ message: string; run_id: string; step: string; status_url: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/pipeline/step/${stepName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request || {}),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to run step: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  cancelPipeline: async (runId: string): Promise<{ message: string; run_id: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/pipeline/cancel`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to cancel pipeline: ${res.status}`);
+    }
+    return res.json();
+  },
 };

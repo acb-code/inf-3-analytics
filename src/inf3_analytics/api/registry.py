@@ -8,7 +8,13 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from inf3_analytics.api.models import RunMetadata, RunStatus
+from inf3_analytics.api.models import (
+    PipelineStep,
+    PipelineStepInfo,
+    RunMetadata,
+    RunStatus,
+    StepStatus,
+)
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 
@@ -47,6 +53,27 @@ class RunRegistry:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pipeline_steps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL,
+                    step TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    started_at TEXT,
+                    completed_at TEXT,
+                    error_message TEXT,
+                    output TEXT,
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+                    UNIQUE(run_id, step)
+                )
+                """
+            )
+            # Add output column if it doesn't exist (migration for existing DBs)
+            try:
+                conn.execute("ALTER TABLE pipeline_steps ADD COLUMN output TEXT")
+            except Exception:
+                pass  # Column already exists
 
     def _is_sqlite_file(self) -> bool:
         if not self._path.exists():
@@ -227,6 +254,118 @@ class RunRegistry:
                     (status.value, run_id),
                 )
                 return cur.rowcount > 0
+
+    def init_pipeline_steps(self, run_id: str) -> None:
+        """Initialize pipeline steps for a run.
+
+        Creates pending entries for all pipeline steps.
+
+        Args:
+            run_id: The run identifier
+        """
+        with self._lock:
+            with self._connect() as conn:
+                for step in PipelineStep:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO pipeline_steps (run_id, step, status)
+                        VALUES (?, ?, ?)
+                        """,
+                        (run_id, step.value, StepStatus.PENDING.value),
+                    )
+
+    def update_step_status(
+        self,
+        run_id: str,
+        step: PipelineStep,
+        status: StepStatus,
+        error_message: str | None = None,
+        output: str | None = None,
+    ) -> bool:
+        """Update the status of a pipeline step.
+
+        Args:
+            run_id: The run identifier
+            step: The pipeline step
+            status: New status
+            error_message: Optional error message for failed steps
+            output: Optional stdout/stderr output from the step
+
+        Returns:
+            True if updated, False if step not found
+        """
+        with self._lock:
+            now = datetime.now(UTC).isoformat()
+            with self._connect() as conn:
+                if status == StepStatus.RUNNING:
+                    cur = conn.execute(
+                        """
+                        UPDATE pipeline_steps
+                        SET status = ?, started_at = ?, error_message = NULL, output = NULL
+                        WHERE run_id = ? AND step = ?
+                        """,
+                        (status.value, now, run_id, step.value),
+                    )
+                elif status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED):
+                    cur = conn.execute(
+                        """
+                        UPDATE pipeline_steps
+                        SET status = ?, completed_at = ?, error_message = ?, output = ?
+                        WHERE run_id = ? AND step = ?
+                        """,
+                        (status.value, now, error_message, output, run_id, step.value),
+                    )
+                else:
+                    cur = conn.execute(
+                        """
+                        UPDATE pipeline_steps
+                        SET status = ?, error_message = ?, output = ?
+                        WHERE run_id = ? AND step = ?
+                        """,
+                        (status.value, error_message, output, run_id, step.value),
+                    )
+                return cur.rowcount > 0
+
+    def get_pipeline_steps(self, run_id: str) -> list[PipelineStepInfo]:
+        """Get all pipeline steps for a run.
+
+        Args:
+            run_id: The run identifier
+
+        Returns:
+            List of PipelineStepInfo for all steps
+        """
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT step, status, started_at, completed_at, error_message, output
+                    FROM pipeline_steps
+                    WHERE run_id = ?
+                    ORDER BY id
+                    """,
+                    (run_id,),
+                ).fetchall()
+
+            return [
+                PipelineStepInfo(
+                    step=PipelineStep(row["step"]),
+                    status=StepStatus(row["status"]),
+                    started_at=(
+                        datetime.fromisoformat(row["started_at"])
+                        if row["started_at"]
+                        else None
+                    ),
+                    completed_at=(
+                        datetime.fromisoformat(row["completed_at"])
+                        if row["completed_at"]
+                        else None
+                    ),
+                    error_message=row["error_message"],
+                    output=row["output"],
+                )
+                for row in rows
+            ]
 
     def _generate_run_id(self) -> str:
         """Generate a unique run ID."""

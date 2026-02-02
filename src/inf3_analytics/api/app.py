@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from inf3_analytics.api.config import get_settings
-from inf3_analytics.api.routes import artifacts, runs, video
+from inf3_analytics.api.routes import artifacts, pipeline, runs, upload, video
 
 
 @asynccontextmanager
@@ -42,6 +42,8 @@ def create_app() -> FastAPI:
     application.include_router(runs.router)
     application.include_router(artifacts.router)
     application.include_router(video.router)
+    application.include_router(upload.router)
+    application.include_router(pipeline.router)
 
     return application
 

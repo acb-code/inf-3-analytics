@@ -1,6 +1,16 @@
 // Run status
 export type RunStatus = "created" | "running" | "completed" | "failed";
 
+// Pipeline step names
+export type PipelineStep =
+  | "transcribe"
+  | "extract_events"
+  | "extract_frames"
+  | "frame_analytics";
+
+// Pipeline step status
+export type StepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+
 // Artifact types
 export type ArtifactType =
   | "transcript"
@@ -207,4 +217,38 @@ export interface FrameAnalyticsResponse {
   event_id: string;
   frame_analyses: FrameAnalysis[];
   event_summary: EventSummary | null;
+}
+
+// Pipeline step info
+export interface PipelineStepInfo {
+  step: PipelineStep;
+  status: StepStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  output: string | null;
+}
+
+// Response from GET /runs/{run_id}/pipeline/status
+export interface PipelineStatusResponse {
+  run_id: string;
+  run_status: RunStatus;
+  steps: PipelineStepInfo[];
+  progress_percent: number;
+}
+
+// Response from POST /upload
+export interface UploadResponse {
+  run_id: string;
+  video_path: string;
+  run_root: string;
+  message: string;
+}
+
+// Request for POST /runs/{run_id}/pipeline/start
+export interface TriggerPipelineRequest {
+  steps?: PipelineStep[];
+  transcription_engine?: string;
+  event_engine?: string;
+  frame_analytics_engine?: string;
 }

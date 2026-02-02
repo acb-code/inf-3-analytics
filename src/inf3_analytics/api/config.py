@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     inf3_cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     """Allowed CORS origins."""
 
+    inf3_uploads_dir: Path = Path("uploads")
+    """Directory for uploaded video files (relative to data root or absolute)."""
+
+    inf3_outputs_dir: Path = Path("outputs")
+    """Directory for pipeline outputs (relative to data root or absolute)."""
+
+    inf3_max_upload_size_mb: int = 2048
+    """Maximum upload file size in megabytes."""
+
+    inf3_allowed_video_extensions: list[str] = [".mp4", ".mov", ".avi", ".mkv", ".webm"]
+    """Allowed video file extensions for upload."""
+
     model_config = {"env_prefix": ""}
 
 

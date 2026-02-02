@@ -16,6 +16,25 @@ class RunStatus(str, Enum):
     FAILED = "failed"
 
 
+class PipelineStep(str, Enum):
+    """Steps in the analytics pipeline."""
+
+    TRANSCRIBE = "transcribe"
+    EXTRACT_EVENTS = "extract_events"
+    EXTRACT_FRAMES = "extract_frames"
+    FRAME_ANALYTICS = "frame_analytics"
+
+
+class StepStatus(str, Enum):
+    """Status of a pipeline step."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class ArtifactType(str, Enum):
     """Types of artifacts produced by the pipeline."""
 
@@ -121,3 +140,52 @@ class FrameAnalyticsEventResponse(BaseModel):
     event_id: str
     frame_analyses: list[dict[str, Any]]
     event_summary: dict[str, Any] | None
+
+
+# Pipeline models
+
+
+class PipelineStepInfo(BaseModel):
+    """Information about a pipeline step."""
+
+    step: PipelineStep
+    status: StepStatus
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    output: str | None = None
+
+
+class PipelineStatusResponse(BaseModel):
+    """Response for pipeline status."""
+
+    run_id: str
+    run_status: RunStatus
+    steps: list[PipelineStepInfo]
+    progress_percent: int = Field(..., ge=0, le=100)
+
+
+class UploadResponse(BaseModel):
+    """Response after successful video upload."""
+
+    run_id: str
+    video_path: str
+    run_root: str
+    message: str
+
+
+class TriggerPipelineRequest(BaseModel):
+    """Request to trigger pipeline execution."""
+
+    steps: list[PipelineStep] | None = Field(
+        default=None, description="Steps to run (default: all steps)"
+    )
+    transcription_engine: str = Field(
+        default="openai", description="Transcription engine: openai, gemini, faster-whisper"
+    )
+    event_engine: str = Field(
+        default="openai", description="Event extraction engine: openai, gemini, rules"
+    )
+    frame_analytics_engine: str = Field(
+        default="gemini", description="Frame analytics engine: gemini, openai, baseline_quality"
+    )

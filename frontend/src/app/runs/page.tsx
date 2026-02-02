@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import type { RunMetadata } from "@/types/api";
 import { RunCard } from "@/components/RunCard";
@@ -48,9 +49,17 @@ export default function RunsPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Inspection Runs</h1>
-        <p className="text-gray-600">Select a run to view video and events</p>
+      <header className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Inspection Runs</h1>
+          <p className="text-gray-600">Select a run to view video and events</p>
+        </div>
+        <Link
+          href="/upload"
+          className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+        >
+          Upload Video
+        </Link>
       </header>
 
       {runs.length === 0 ? (
