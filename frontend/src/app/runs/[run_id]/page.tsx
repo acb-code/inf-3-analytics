@@ -1,0 +1,117 @@
+"use client";
+
+import { useEffect, useState, useRef, use } from "react";
+import Link from "next/link";
+import { api } from "@/lib/api";
+import type { RunDetailResponse, Event } from "@/types/api";
+import { VideoPlayer } from "@/components/VideoPlayer";
+import { EventList } from "@/components/EventList";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+
+interface PageProps {
+  params: Promise<{ run_id: string }>;
+}
+
+export default function RunDetailPage({ params }: PageProps) {
+  const { run_id } = use(params);
+  const [run, setRun] = useState<RunDetailResponse | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    Promise.all([api.getRun(run_id), api.getEvents(run_id).catch(() => ({ events: [] }))])
+      .then(([runData, eventsData]) => {
+        setRun(runData);
+        setEvents(eventsData.events || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [run_id]);
+
+  const handleEventClick = (event: Event) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = event.start_s;
+      videoRef.current.play();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error || !run) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="font-medium">Error loading run</p>
+          <p className="text-sm">{error || "Run not found"}</p>
+          <Link href="/runs" className="mt-2 inline-block text-sm underline">
+            Back to runs
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen flex-col">
+      {/* Header */}
+      <header className="border-b border-gray-200 bg-white px-4 py-3">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/runs"
+            className="text-gray-600 hover:text-gray-900"
+          >
+            &larr; Runs
+          </Link>
+          <div>
+            <h1 className="font-mono text-lg font-medium text-gray-900">
+              {run.run_id.slice(0, 12)}...
+            </h1>
+            {run.video_filename && (
+              <p className="text-sm text-gray-500">{run.video_filename}</p>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* Video section - 2/3 width on desktop */}
+        <div className="flex-shrink-0 bg-black p-4 lg:w-2/3">
+          <VideoPlayer
+            ref={videoRef}
+            src={api.getVideoUrl(run_id)}
+            onTimeUpdate={setCurrentTime}
+          />
+        </div>
+
+        {/* Events section - 1/3 width on desktop */}
+        <div className="flex min-h-0 flex-1 flex-col border-l border-gray-200 bg-gray-50 lg:w-1/3">
+          <div className="border-b border-gray-200 bg-white px-4 py-3">
+            <h2 className="font-medium text-gray-900">
+              Events ({events.length})
+            </h2>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <EventList
+              events={events}
+              currentTime={currentTime}
+              onEventClick={handleEventClick}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
