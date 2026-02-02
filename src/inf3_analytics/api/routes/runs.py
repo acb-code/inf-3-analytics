@@ -24,9 +24,10 @@ from inf3_analytics.api.registry import RunRegistry
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-def _detect_artifacts(run: RunMetadata) -> list[ArtifactInfo]:
+def _detect_artifacts(run: RunMetadata, settings: Settings) -> list[ArtifactInfo]:
     """Detect available artifacts for a run."""
     run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
     basename = run.video_basename
     artifacts = []
 
@@ -124,7 +125,8 @@ def list_runs(
 @router.get("/{run_id}", response_model=RunDetailResponse)
 def get_run(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> RunDetailResponse:
     """Get details for a specific run."""
-    artifacts = _detect_artifacts(run)
+    artifacts = _detect_artifacts(run, settings)
     return RunDetailResponse(run=run, artifacts=artifacts)

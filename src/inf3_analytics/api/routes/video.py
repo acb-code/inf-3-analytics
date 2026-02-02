@@ -9,7 +9,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from inf3_analytics.api.dependencies import get_run_or_404
+from inf3_analytics.api.config import Settings, get_settings
+from inf3_analytics.api.dependencies import get_run_or_404, validate_path_security
 from inf3_analytics.api.models import RunMetadata
 
 router = APIRouter(prefix="/runs/{run_id}", tags=["video"])
@@ -97,9 +98,11 @@ def _file_iterator(path: Path, start: int, end: int) -> Iterator[bytes]:
 def stream_video(
     request: Request,
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> StreamingResponse:
     """Stream the video file with HTTP Range support."""
     video_path = Path(run.video_path)
+    validate_path_security(video_path, settings)
 
     if not video_path.exists():
         raise HTTPException(
