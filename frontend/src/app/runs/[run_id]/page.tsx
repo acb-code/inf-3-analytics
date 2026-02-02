@@ -88,7 +88,7 @@ export default function RunDetailPage({ params }: PageProps) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Video section - 2/3 width on desktop */}
-        <div className="flex-shrink-0 bg-black p-4 lg:w-2/3">
+        <div className="h-[50vh] lg:h-auto lg:flex-1 bg-gray-900 p-4 lg:w-2/3">
           <VideoPlayer
             ref={videoRef}
             src={api.getVideoUrl(run_id)}
