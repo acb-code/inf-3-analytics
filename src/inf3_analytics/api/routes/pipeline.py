@@ -1,10 +1,13 @@
 """Pipeline execution endpoints."""
 
+import asyncio
+import json
+from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from sse_starlette.sse import EventSourceResponse
 
-from inf3_analytics.api.config import Settings, get_settings
 from inf3_analytics.api.dependencies import get_registry, get_run_or_404
 from inf3_analytics.api.models import (
     PipelineStatusResponse,
@@ -20,9 +23,21 @@ from inf3_analytics.api.pipeline_executor import (
     execute_pipeline,
     execute_single_step,
 )
+from inf3_analytics.api.queue import TaskQueue
 from inf3_analytics.api.registry import RunRegistry
 
 router = APIRouter(prefix="/runs/{run_id}/pipeline", tags=["pipeline"])
+
+# Shared queue instance (initialized lazily)
+_queue: TaskQueue | None = None
+
+
+def get_queue() -> TaskQueue:
+    """Get the shared task queue instance."""
+    global _queue
+    if _queue is None:
+        _queue = TaskQueue()
+    return _queue
 
 
 def _calculate_progress(steps: list[PipelineStepInfo]) -> int:
@@ -99,16 +114,101 @@ def get_pipeline_status(
     )
 
 
+async def _status_event_generator(
+    request: Request,
+    run_id: str,
+    registry: RunRegistry,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Generate SSE events for pipeline status updates.
+
+    Emits status events every 500ms when status changes, and a done event
+    when the pipeline completes or fails.
+    """
+    last_status_json: str | None = None
+
+    while True:
+        # Check if client disconnected
+        if await request.is_disconnected():
+            break
+
+        # Get current status
+        run = registry.get_run(run_id)
+        if run is None:
+            yield {"event": "error", "data": json.dumps({"error": "Run not found"})}
+            break
+
+        steps = registry.get_pipeline_steps(run_id)
+        if not steps:
+            registry.init_pipeline_steps(run_id)
+            steps = registry.get_pipeline_steps(run_id)
+
+        status_response = PipelineStatusResponse(
+            run_id=run_id,
+            run_status=run.status,
+            steps=steps,
+            progress_percent=_calculate_progress(steps),
+        )
+
+        # Serialize status (excluding output to reduce payload size)
+        status_dict = status_response.model_dump(mode="json")
+        # Strip large output fields from SSE to reduce bandwidth
+        for step in status_dict.get("steps", []):
+            if step.get("output"):
+                step["output"] = step["output"][-500:] if len(step["output"]) > 500 else step["output"]
+
+        current_status_json = json.dumps(status_dict, sort_keys=True)
+
+        # Only emit if status changed
+        if current_status_json != last_status_json:
+            last_status_json = current_status_json
+            yield {"event": "status", "data": json.dumps(status_dict)}
+
+        # Check if pipeline is done
+        is_done = run.status in (RunStatus.COMPLETED, RunStatus.FAILED) or all(
+            s.status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED)
+            for s in steps
+        )
+
+        if is_done:
+            yield {"event": "done", "data": json.dumps({"run_status": run.status.value})}
+            break
+
+        # Wait before next poll
+        await asyncio.sleep(0.5)
+
+
+@router.get("/stream")
+async def stream_pipeline_status(
+    request: Request,
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    registry: Annotated[RunRegistry, Depends(get_registry)],
+) -> EventSourceResponse:
+    """Stream pipeline status updates via Server-Sent Events.
+
+    Emits events:
+    - status: Pipeline status update (when changed)
+    - done: Pipeline completed or failed (closes stream)
+    - error: Error occurred
+    """
+    return EventSourceResponse(
+        _status_event_generator(request, run.run_id, registry),
+        media_type="text/event-stream",
+    )
+
+
 @router.post("/start", status_code=status.HTTP_202_ACCEPTED)
 def start_pipeline(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     registry: Annotated[RunRegistry, Depends(get_registry)],
     background_tasks: BackgroundTasks,
     request: TriggerPipelineRequest | None = None,
-) -> dict[str, str]:
+    use_queue: bool = False,
+) -> dict[str, Any]:
     """Start the full pipeline for a run.
 
-    Queues all pipeline steps to run in sequence as a background task.
+    Queues all pipeline steps to run in sequence. By default uses background tasks
+    for immediate execution. Set use_queue=True to use file-based queue for
+    restart resilience (requires separate worker process).
     """
     # Use default request if none provided
     if request is None:
@@ -130,22 +230,39 @@ def start_pipeline(
     for step in PipelineStep:
         registry.update_step_status(run.run_id, step, StepStatus.PENDING)
 
-    # Queue background task
-    background_tasks.add_task(
-        execute_pipeline,
-        registry=registry,
-        run_id=run.run_id,
-        video_path=run.video_path,
-        run_root=run.run_root,
-        video_basename=run.video_basename,
-        request=request,
-    )
-
-    return {
-        "message": "Pipeline started",
-        "run_id": run.run_id,
-        "status_url": f"/runs/{run.run_id}/pipeline/status",
-    }
+    if use_queue:
+        # Use file-based queue for restart resilience
+        queue = get_queue()
+        task_id = queue.enqueue(
+            run_id=run.run_id,
+            video_path=run.video_path,
+            run_root=run.run_root,
+            video_basename=run.video_basename,
+            request=request.model_dump(),
+            step=None,  # Full pipeline
+        )
+        return {
+            "message": "Pipeline queued",
+            "run_id": run.run_id,
+            "task_id": task_id,
+            "status_url": f"/runs/{run.run_id}/pipeline/status",
+        }
+    else:
+        # Use background task for immediate execution (legacy behavior)
+        background_tasks.add_task(
+            execute_pipeline,
+            registry=registry,
+            run_id=run.run_id,
+            video_path=run.video_path,
+            run_root=run.run_root,
+            video_basename=run.video_basename,
+            request=request,
+        )
+        return {
+            "message": "Pipeline started",
+            "run_id": run.run_id,
+            "status_url": f"/runs/{run.run_id}/pipeline/status",
+        }
 
 
 @router.post("/step/{step_name}", status_code=status.HTTP_202_ACCEPTED)
@@ -153,13 +270,15 @@ def run_single_step(
     step_name: str,
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     registry: Annotated[RunRegistry, Depends(get_registry)],
-    settings: Annotated[Settings, Depends(get_settings)],
     background_tasks: BackgroundTasks,
     request: TriggerPipelineRequest | None = None,
-) -> dict[str, str]:
+    use_queue: bool = False,
+) -> dict[str, Any]:
     """Run a single pipeline step.
 
-    Validates that prerequisites are met before running.
+    Validates that prerequisites are met before running. By default uses background
+    tasks for immediate execution. Set use_queue=True to use file-based queue for
+    restart resilience (requires separate worker process).
     """
     # Validate step name
     try:
@@ -197,24 +316,42 @@ def run_single_step(
             detail=error,
         )
 
-    # Queue background task for the single step
-    background_tasks.add_task(
-        execute_single_step,
-        registry=registry,
-        run_id=run.run_id,
-        video_path=run.video_path,
-        run_root=run.run_root,
-        video_basename=run.video_basename,
-        step=step,
-        request=request,
-    )
-
-    return {
-        "message": f"Step '{step_name}' started",
-        "run_id": run.run_id,
-        "step": step_name,
-        "status_url": f"/runs/{run.run_id}/pipeline/status",
-    }
+    if use_queue:
+        # Use file-based queue for restart resilience
+        queue = get_queue()
+        task_id = queue.enqueue(
+            run_id=run.run_id,
+            video_path=run.video_path,
+            run_root=run.run_root,
+            video_basename=run.video_basename,
+            request=request.model_dump(),
+            step=step_name,
+        )
+        return {
+            "message": f"Step '{step_name}' queued",
+            "run_id": run.run_id,
+            "step": step_name,
+            "task_id": task_id,
+            "status_url": f"/runs/{run.run_id}/pipeline/status",
+        }
+    else:
+        # Use background task for immediate execution (legacy behavior)
+        background_tasks.add_task(
+            execute_single_step,
+            registry=registry,
+            run_id=run.run_id,
+            video_path=run.video_path,
+            run_root=run.run_root,
+            video_basename=run.video_basename,
+            step=step,
+            request=request,
+        )
+        return {
+            "message": f"Step '{step_name}' started",
+            "run_id": run.run_id,
+            "step": step_name,
+            "status_url": f"/runs/{run.run_id}/pipeline/status",
+        }
 
 
 @router.post("/step/{step_name}/cancel", status_code=status.HTTP_200_OK)

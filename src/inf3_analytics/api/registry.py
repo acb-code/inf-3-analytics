@@ -6,7 +6,6 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any
 
 from inf3_analytics.api.models import (
     PipelineStep,
@@ -98,6 +97,10 @@ class RunRegistry:
                 conn.execute(
                     "ALTER TABLE pipeline_steps ADD COLUMN progress_message TEXT"
                 )
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE pipeline_steps ADD COLUMN pid INTEGER")
             except Exception:
                 pass
 
@@ -321,6 +324,79 @@ class RunRegistry:
                         (run_id, step.value, StepStatus.PENDING.value),
                     )
 
+    def update_step_pid(self, run_id: str, step: PipelineStep, pid: int) -> bool:
+        """Update the PID for a running pipeline step.
+
+        Args:
+            run_id: The run identifier
+            step: The pipeline step
+            pid: Process ID of the running subprocess
+
+        Returns:
+            True if updated, False if step not found
+        """
+        with self._lock:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    """
+                    UPDATE pipeline_steps SET pid = ?
+                    WHERE run_id = ? AND step = ?
+                    """,
+                    (pid, run_id, step.value),
+                )
+                return cur.rowcount > 0
+
+    def get_running_steps(self) -> list[tuple[str, PipelineStep, int]]:
+        """Get all steps currently marked as RUNNING with their PIDs.
+
+        Returns:
+            List of (run_id, step, pid) tuples for running steps with PIDs
+        """
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT run_id, step, pid FROM pipeline_steps
+                    WHERE status = ? AND pid IS NOT NULL
+                    """,
+                    (StepStatus.RUNNING.value,),
+                ).fetchall()
+            return [(row["run_id"], PipelineStep(row["step"]), row["pid"]) for row in rows]
+
+    def mark_orphaned_steps(self) -> int:
+        """Mark steps as FAILED if their process is no longer running.
+
+        Checks all RUNNING steps with PIDs and marks them FAILED if the
+        process no longer exists.
+
+        Returns:
+            Number of steps marked as orphaned
+        """
+        import os
+
+        running_steps = self.get_running_steps()
+        orphaned_count = 0
+
+        for run_id, step, pid in running_steps:
+            try:
+                # Check if process exists (signal 0 doesn't kill, just checks)
+                os.kill(pid, 0)
+            except OSError:
+                # Process doesn't exist - mark as failed
+                self.update_step_status(
+                    run_id,
+                    step,
+                    StepStatus.FAILED,
+                    error_message="Process died unexpectedly (server restart or crash)",
+                )
+                # Also update the run status if it was running
+                run = self.get_run(run_id)
+                if run and run.status == RunStatus.RUNNING:
+                    self.update_status(run_id, RunStatus.FAILED)
+                orphaned_count += 1
+
+        return orphaned_count
+
     def update_step_status(
         self,
         run_id: str,
@@ -350,7 +426,7 @@ class RunRegistry:
                         UPDATE pipeline_steps
                         SET status = ?, started_at = ?, error_message = NULL, output = NULL,
                             progress_current = NULL, progress_total = NULL,
-                            progress_unit = NULL, progress_message = NULL
+                            progress_unit = NULL, progress_message = NULL, pid = NULL
                         WHERE run_id = ? AND step = ?
                         """,
                         (status.value, now, run_id, step.value),
@@ -359,7 +435,7 @@ class RunRegistry:
                     cur = conn.execute(
                         """
                         UPDATE pipeline_steps
-                        SET status = ?, completed_at = ?, error_message = ?, output = ?
+                        SET status = ?, completed_at = ?, error_message = ?, output = ?, pid = NULL
                         WHERE run_id = ? AND step = ?
                         """,
                         (status.value, now, error_message, output, run_id, step.value),
@@ -437,7 +513,7 @@ class RunRegistry:
                 rows = conn.execute(
                     """
                     SELECT step, status, started_at, completed_at, error_message, output,
-                           progress_current, progress_total, progress_unit, progress_message
+                           progress_current, progress_total, progress_unit, progress_message, pid
                     FROM pipeline_steps
                     WHERE run_id = ?
                     ORDER BY id
@@ -465,6 +541,7 @@ class RunRegistry:
                     progress_total=row["progress_total"],
                     progress_unit=row["progress_unit"],
                     progress_message=row["progress_message"],
+                    pid=row["pid"],
                 )
                 for row in rows
             ]

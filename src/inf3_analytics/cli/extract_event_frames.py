@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from inf3_analytics.cli.progress import emit_progress
 from inf3_analytics.frame_extraction import (
     FixedFPSWithinEventPolicy,
     NFramesPerEventPolicy,
@@ -158,6 +159,7 @@ def main(args: list[str] | None = None) -> int:
 
     # Progress callback
     def progress(event: Event, idx: int, total: int) -> None:
+        emit_progress(idx + 1, total, "events", "Extracting frames")
         print(f"[{idx + 1}/{total}] Extracting frames for: {event.title[:50]}...")
 
     # Extract frames

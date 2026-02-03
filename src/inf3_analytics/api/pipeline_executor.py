@@ -1,19 +1,23 @@
 """Background pipeline executor for running analytics steps."""
 
+from __future__ import annotations
+
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
+from typing import TYPE_CHECKING
 
 from dotenv import dotenv_values
 
 from inf3_analytics.api.models import PipelineStep, RunStatus, StepStatus, TriggerPipelineRequest
-from inf3_analytics.api.registry import RunRegistry
+
+if TYPE_CHECKING:
+    from inf3_analytics.api.registry import RunRegistry
 
 
 STEP_TIMEOUT_SECONDS = 3600  # 1 hour per step
@@ -34,6 +38,9 @@ _process_lock = Lock()
 _FRAME_TOTAL_RE = re.compile(r"Frames to process:\s*(\d+)")
 _FRAME_LINE_RE = re.compile(r"^\s*Frame\s+\d+:", re.MULTILINE)
 _EXTRACT_EVENT_RE = re.compile(r"\[(\d+)/(\d+)\]\s+Extracting frames for:", re.MULTILINE)
+
+# Structured progress format: ##PROGRESS##{"current":5,"total":10,"unit":"frames"}##
+_STRUCTURED_PROGRESS_RE = re.compile(r"##PROGRESS##(.+?)##")
 
 
 def _register_process(run_id: str, process: subprocess.Popen[str]) -> None:
@@ -147,6 +154,8 @@ def _run_subprocess(
     timeout: int = STEP_TIMEOUT_SECONDS,
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
+    step: PipelineStep | None = None,
 ) -> tuple[bool, str]:
     """Run a subprocess command and return success status and output.
 
@@ -155,6 +164,8 @@ def _run_subprocess(
         timeout: Timeout in seconds
         on_output: Optional callback called periodically with accumulated output
         run_id: Optional run ID for process tracking (enables cancellation)
+        registry: Optional registry to store PID
+        step: Optional step to associate with PID
 
     Returns:
         Tuple of (success, output_or_error)
@@ -176,6 +187,10 @@ def _run_subprocess(
         # Register process for cancellation
         if run_id:
             _register_process(run_id, process)
+
+        # Store PID in registry for orphan detection
+        if registry and run_id and step and process.pid:
+            registry.update_step_pid(run_id, step, process.pid)
 
         output_lines: list[str] = []
         start_time = time.time()
@@ -270,6 +285,7 @@ def run_transcription(
     engine: str = "openai",
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
 ) -> tuple[bool, str]:
     """Run the transcription step.
 
@@ -279,6 +295,7 @@ def run_transcription(
         engine: Transcription engine to use
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
+        registry: Optional registry for PID tracking
 
     Returns:
         Tuple of (success, message)
@@ -295,7 +312,9 @@ def run_transcription(
         "json,txt,srt",
     ]
     cmd = _build_uv_command("inf3_analytics.cli.transcribe", args, extras)
-    return _run_subprocess(cmd, on_output=on_output, run_id=run_id)
+    return _run_subprocess(
+        cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.TRANSCRIBE
+    )
 
 
 def run_event_extraction(
@@ -304,6 +323,7 @@ def run_event_extraction(
     engine: str = "openai",
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
 ) -> tuple[bool, str]:
     """Run the event extraction step.
 
@@ -313,6 +333,7 @@ def run_event_extraction(
         engine: Event extraction engine to use
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
+        registry: Optional registry for PID tracking
 
     Returns:
         Tuple of (success, message)
@@ -334,7 +355,9 @@ def run_event_extraction(
         "json,md",
     ]
     cmd = _build_uv_command("inf3_analytics.cli.extract_events", args, extras)
-    return _run_subprocess(cmd, on_output=on_output, run_id=run_id)
+    return _run_subprocess(
+        cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.EXTRACT_EVENTS
+    )
 
 
 def run_frame_extraction(
@@ -343,6 +366,7 @@ def run_frame_extraction(
     video_basename: str,
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
 ) -> tuple[bool, str]:
     """Run the frame extraction step.
 
@@ -352,6 +376,7 @@ def run_frame_extraction(
         video_basename: Video filename without extension
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
+        registry: Optional registry for PID tracking
 
     Returns:
         Tuple of (success, message)
@@ -371,7 +396,9 @@ def run_frame_extraction(
         str(frames_dir),
     ]
     cmd = _build_uv_command("inf3_analytics.cli.extract_event_frames", args, [])
-    return _run_subprocess(cmd, on_output=on_output, run_id=run_id)
+    return _run_subprocess(
+        cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.EXTRACT_FRAMES
+    )
 
 
 def run_frame_analytics(
@@ -380,6 +407,7 @@ def run_frame_analytics(
     engine: str = "gemini",
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
 ) -> tuple[bool, str]:
     """Run the frame analytics step.
 
@@ -389,6 +417,7 @@ def run_frame_analytics(
         engine: Frame analytics engine to use
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
+        registry: Optional registry for PID tracking
 
     Returns:
         Tuple of (success, message)
@@ -413,7 +442,9 @@ def run_frame_analytics(
         args.extend(["--events", str(events_path)])
 
     cmd = _build_uv_command("inf3_analytics.cli.run_frame_analytics", args, extras)
-    return _run_subprocess(cmd, on_output=on_output, run_id=run_id)
+    return _run_subprocess(
+        cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.FRAME_ANALYTICS
+    )
 
 
 def _make_output_callback(
@@ -432,8 +463,39 @@ def _make_output_callback(
         Callback function that updates step output
     """
 
-    def _extract_progress(output: str) -> tuple[int | None, int | None, str | None, str | None]:
-        """Extract progress details from step output."""
+    def _parse_structured_progress(
+        output: str,
+    ) -> tuple[int | None, int | None, str | None, str | None]:
+        """Parse structured progress from ##PROGRESS##...## lines.
+
+        Returns:
+            Tuple of (current, total, unit, message) from last progress line,
+            or (None, None, None, None) if no structured progress found.
+        """
+        import json as json_module
+
+        last_match = None
+        for match in _STRUCTURED_PROGRESS_RE.finditer(output):
+            last_match = match
+
+        if last_match is None:
+            return None, None, None, None
+
+        try:
+            data = json_module.loads(last_match.group(1))
+            return (
+                data.get("current"),
+                data.get("total"),
+                data.get("unit"),
+                data.get("message"),
+            )
+        except (json_module.JSONDecodeError, KeyError):
+            return None, None, None, None
+
+    def _extract_progress_legacy(
+        output: str,
+    ) -> tuple[int | None, int | None, str | None, str | None]:
+        """Extract progress using legacy regex patterns (fallback)."""
         if step == PipelineStep.FRAME_ANALYTICS:
             total_match = None
             for match in _FRAME_TOTAL_RE.finditer(output):
@@ -457,6 +519,19 @@ def _make_output_callback(
             return current, total, "events", "Extracting frames"
 
         return None, None, None, None
+
+    def _extract_progress(output: str) -> tuple[int | None, int | None, str | None, str | None]:
+        """Extract progress details from step output.
+
+        Tries structured ##PROGRESS## format first, falls back to legacy regex.
+        """
+        # Try structured progress first
+        result = _parse_structured_progress(output)
+        if result[0] is not None:
+            return result
+
+        # Fall back to legacy regex parsing
+        return _extract_progress_legacy(output)
 
     def callback(output: str) -> None:
         progress_current, progress_total, progress_unit, progress_message = _extract_progress(output)
@@ -518,19 +593,19 @@ def execute_pipeline(
         # Execute the step
         if step == PipelineStep.TRANSCRIBE:
             success, message = run_transcription(
-                video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id
+                video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry
             )
         elif step == PipelineStep.EXTRACT_EVENTS:
             success, message = run_event_extraction(
-                run_root_obj, video_basename, request.event_engine, on_output, run_id
+                run_root_obj, video_basename, request.event_engine, on_output, run_id, registry
             )
         elif step == PipelineStep.EXTRACT_FRAMES:
             success, message = run_frame_extraction(
-                video_path_obj, run_root_obj, video_basename, on_output, run_id
+                video_path_obj, run_root_obj, video_basename, on_output, run_id, registry
             )
         elif step == PipelineStep.FRAME_ANALYTICS:
             success, message = run_frame_analytics(
-                run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id
+                run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry
             )
         else:
             success, message = False, f"Unknown step: {step}"
@@ -600,19 +675,19 @@ def execute_single_step(
     # Execute the step
     if step == PipelineStep.TRANSCRIBE:
         success, message = run_transcription(
-            video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id
+            video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry
         )
     elif step == PipelineStep.EXTRACT_EVENTS:
         success, message = run_event_extraction(
-            run_root_obj, video_basename, request.event_engine, on_output, run_id
+            run_root_obj, video_basename, request.event_engine, on_output, run_id, registry
         )
     elif step == PipelineStep.EXTRACT_FRAMES:
         success, message = run_frame_extraction(
-            video_path_obj, run_root_obj, video_basename, on_output, run_id
+            video_path_obj, run_root_obj, video_basename, on_output, run_id, registry
         )
     elif step == PipelineStep.FRAME_ANALYTICS:
         success, message = run_frame_analytics(
-            run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id
+            run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry
         )
     else:
         success, message = False, f"Unknown step: {step}"

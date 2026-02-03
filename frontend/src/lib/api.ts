@@ -173,4 +173,53 @@ export const api = {
     }
     return res.json();
   },
+
+  /**
+   * Stream pipeline status updates via Server-Sent Events.
+   * Returns a cleanup function to close the connection.
+   */
+  streamPipelineStatus: (
+    runId: string,
+    callbacks: {
+      onStatus?: (status: PipelineStatusResponse) => void;
+      onDone?: (data: { run_status: string }) => void;
+      onError?: (error: Error) => void;
+    }
+  ): (() => void) => {
+    const url = `${API_BASE}/runs/${runId}/pipeline/stream`;
+    const eventSource = new EventSource(url);
+
+    eventSource.addEventListener("status", (event) => {
+      try {
+        const data = JSON.parse(event.data) as PipelineStatusResponse;
+        callbacks.onStatus?.(data);
+      } catch (err) {
+        callbacks.onError?.(new Error("Failed to parse status event"));
+      }
+    });
+
+    eventSource.addEventListener("done", (event) => {
+      try {
+        const data = JSON.parse(event.data) as { run_status: string };
+        callbacks.onDone?.(data);
+      } catch (err) {
+        callbacks.onError?.(new Error("Failed to parse done event"));
+      }
+      eventSource.close();
+    });
+
+    eventSource.addEventListener("error", (event) => {
+      // Check if it's just the connection closing (expected after done)
+      if (eventSource.readyState === EventSource.CLOSED) {
+        return;
+      }
+      callbacks.onError?.(new Error("SSE connection error"));
+      eventSource.close();
+    });
+
+    // Return cleanup function
+    return () => {
+      eventSource.close();
+    };
+  },
 };

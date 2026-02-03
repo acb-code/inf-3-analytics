@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import type { PipelineStatusResponse, PipelineStep, PipelineStepInfo, StepStatus } from "@/types/api";
 
@@ -9,6 +9,8 @@ interface PipelineStatusProps {
   onComplete?: () => void;
   onStatusUpdate?: (status: PipelineStatusResponse) => void;
   pollInterval?: number;
+  /** Use SSE streaming instead of polling (default: true) */
+  useSSE?: boolean;
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -168,13 +170,15 @@ function StepRow({
   );
 }
 
-export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval = 2000 }: PipelineStatusProps) {
+export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval = 2000, useSSE = true }: PipelineStatusProps) {
   const [status, setStatus] = useState<PipelineStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelingStep, setCancelingStep] = useState<PipelineStep | null>(null);
   const [polling, setPolling] = useState(true);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [sseActive, setSseActive] = useState(useSSE);
+  const sseCleanupRef = useRef<(() => void) | null>(null);
 
   const toggleStep = useCallback((stepName: string) => {
     setExpandedSteps((prev) => {
@@ -188,9 +192,9 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
     });
   }, []);
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await api.getPipelineStatus(runId);
+  // Handle status updates (shared between SSE and polling)
+  const handleStatusUpdate = useCallback(
+    (data: PipelineStatusResponse) => {
       setStatus(data);
       setError(null);
       setActionError(null);
@@ -209,6 +213,14 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
           return next;
         });
       }
+    },
+    [onStatusUpdate]
+  );
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const data = await api.getPipelineStatus(runId);
+      handleStatusUpdate(data);
 
       // Stop polling if pipeline is done
       const isDone =
@@ -223,7 +235,7 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch status");
     }
-  }, [runId, onComplete, onStatusUpdate]);
+  }, [runId, onComplete, handleStatusUpdate]);
 
   const handleCancelStep = useCallback(
     async (step: PipelineStep) => {
@@ -241,14 +253,46 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
     [runId, fetchStatus]
   );
 
+  // SSE connection effect
   useEffect(() => {
+    if (!sseActive) return;
+
+    const cleanup = api.streamPipelineStatus(runId, {
+      onStatus: (data) => {
+        handleStatusUpdate(data);
+      },
+      onDone: () => {
+        setPolling(false);
+        onComplete?.();
+      },
+      onError: (err) => {
+        // Fall back to polling on SSE error
+        console.warn("SSE connection failed, falling back to polling:", err.message);
+        setSseActive(false);
+        setPolling(true);
+      },
+    });
+
+    sseCleanupRef.current = cleanup;
+
+    return () => {
+      cleanup();
+      sseCleanupRef.current = null;
+    };
+  }, [runId, sseActive, handleStatusUpdate, onComplete]);
+
+  // Polling fallback effect (only when SSE is disabled)
+  useEffect(() => {
+    if (sseActive) return;
+
+    // Initial fetch
     fetchStatus();
 
     if (polling) {
       const interval = setInterval(fetchStatus, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [fetchStatus, polling, pollInterval]);
+  }, [fetchStatus, polling, pollInterval, sseActive]);
 
   if (error && !status) {
     return (

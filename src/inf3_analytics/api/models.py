@@ -158,6 +158,7 @@ class PipelineStepInfo(BaseModel):
     progress_total: int | None = None
     progress_unit: str | None = None
     progress_message: str | None = None
+    pid: int | None = None
 
 
 class PipelineStatusResponse(BaseModel):

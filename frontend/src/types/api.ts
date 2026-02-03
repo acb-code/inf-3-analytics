@@ -231,6 +231,7 @@ export interface PipelineStepInfo {
   progress_total: number | null;
   progress_unit: string | null;
   progress_message: string | null;
+  pid: number | null;
 }
 
 // Response from GET /runs/{run_id}/pipeline/status

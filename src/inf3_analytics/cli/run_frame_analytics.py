@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from inf3_analytics.cli.progress import emit_progress
 from inf3_analytics.frame_analytics import AnalyticsConfig, get_engine, list_engines
 from inf3_analytics.frame_analytics.aggregate import aggregate_event_results
 from inf3_analytics.io.analytics_writer import (
@@ -348,6 +349,14 @@ def main(args: list[str] | None = None) -> int:
                         total_failed += 1
 
                     frames_processed += 1
+
+                    # Emit structured progress for pipeline executor
+                    emit_progress(
+                        frames_processed,
+                        total_frames_to_process,
+                        "frames",
+                        "Analyzing frames",
+                    )
 
                     # Rate limiting
                     if (
