@@ -76,6 +76,57 @@ Then open `http://localhost:3000/runs`.
 
 ---
 
+## Remote Testing (Option A: Cloudflare Quick Tunnel + Caddy)
+
+This option gives you a public HTTPS URL without a domain name and keeps the pipeline running on your local machine.
+
+### 1) Start the API with an isolated data root
+
+```bash
+mkdir -p demo_data
+export INF3_DATA_ROOT="$PWD/demo_data"
+export INF3_REGISTRY_PATH="$PWD/demo_data/registry.json"
+export INF3_MAX_UPLOAD_SIZE_MB=300
+uv run --extra cloud --extra api uvicorn inf3_analytics.api.app:app --host 127.0.0.1 --port 8000
+```
+
+### 2) Start the frontend (same-origin API)
+
+```bash
+cd frontend
+export NEXT_PUBLIC_INF3_API_BASE=
+npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+### 3) Run Caddy as a local reverse proxy with basic auth
+
+```bash
+export BASIC_AUTH_USER=tester
+export BASIC_AUTH_HASH="$(caddy hash-password --plaintext 'your-strong-password')"
+caddy run --config ../Caddyfile.tunnel.example
+```
+
+### 4) Create the public HTTPS URL (Quick Tunnel)
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
+
+Share the printed `https://*.trycloudflare.com` URL and the basic-auth credentials with your tester.
+
+### Security notes
+
+- Keep `INF3_DATA_ROOT` pointed at an isolated folder (like `demo_data`) so uploads/outputs are the only accessible files.
+- Shut down the tunnel when testing is done.
+- Use a strong password in `BASIC_AUTH_HASH`.
+
+### Cost notes
+
+- Quick Tunnel is typically free; compute runs on your machine.
+- API usage is billed to your OpenAI/Gemini keys.
+
+---
+
 ## Prerequisites (Full)
 
 - Python 3.11+
