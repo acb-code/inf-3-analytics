@@ -5,6 +5,7 @@ import json
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +20,12 @@ from inf3_analytics.io.analytics_writer import (
 )
 from inf3_analytics.io.event_writer import read_json as read_events_json
 from inf3_analytics.io.frame_manifest_writer import read_manifest
-from inf3_analytics.types.detection import AnalyticsManifest, EventAnalyticsSummary, FrameMeta
+from inf3_analytics.types.detection import (
+    AnalyticsManifest,
+    EventAnalyticsSummary,
+    FrameAnalyticsResult,
+    FrameMeta,
+)
 from inf3_analytics.types.event import Event
 
 
@@ -164,6 +170,13 @@ Environment Variables:
         help="Show what would be processed without calling APIs",
     )
 
+    parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=8,
+        help="Number of parallel VLM API calls (default: 8, use 1 for sequential)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -217,6 +230,7 @@ def main(args: list[str] | None = None) -> int:
         sleep_ms_between_requests=parsed.sleep_ms,
         fallback_to_baseline=parsed.fallback_to_baseline,
         model_name=parsed.model,
+        parallel_workers=parsed.parallel_workers,
     )
 
     # Count frames to process
@@ -305,12 +319,10 @@ def main(args: list[str] | None = None) -> int:
                     print(f"    Warning: Could not find directory for event {efs.event_id}")
                     continue
 
-                results = []
+                # Build frame metadata for all frames
+                frame_tasks = []
                 for frame_idx, frame in enumerate(frames_to_analyze):
-                    # Build absolute image path
                     image_path = event_source_dir / frame.path
-
-                    # Build frame metadata
                     frame_meta = FrameMeta(
                         frame_idx=frame_idx,
                         timestamp_s=frame.timestamp_s,
@@ -323,51 +335,99 @@ def main(args: list[str] | None = None) -> int:
                             event.transcript_ref.excerpt if event else None
                         ),
                     )
+                    frame_tasks.append((frame_idx, image_path, frame_meta))
 
-                    # Analyze frame
-                    try:
-                        result = engine.analyze(
-                            image_path=image_path,
-                            event=event,
-                            frame_meta=frame_meta,
-                        )
-                        results.append(result)
+                # Process frames (parallel or sequential based on config)
+                results: list[FrameAnalyticsResult | None] = [None] * len(frame_tasks)
 
-                        if result.error:
-                            total_failed += 1
-                            print(f"    Frame {frame_idx}: Error - {result.error[:50]}")
-                        else:
-                            total_analyzed += 1
-                            det_count = len(result.detections)
-                            print(
-                                f"    Frame {frame_idx}: {det_count} detection(s), "
-                                f"scene: {result.scene_summary[:40]}..."
+                if config.parallel_workers > 1:
+                    # Parallel processing
+                    with ThreadPoolExecutor(max_workers=config.parallel_workers) as executor:
+                        future_to_idx = {
+                            executor.submit(
+                                engine.analyze,
+                                image_path=img_path,
+                                event=event,
+                                frame_meta=meta,
+                            ): idx
+                            for idx, img_path, meta in frame_tasks
+                        }
+
+                        for future in as_completed(future_to_idx):
+                            frame_idx = future_to_idx[future]
+                            try:
+                                result = future.result()
+                                results[frame_idx] = result
+
+                                if result.error:
+                                    total_failed += 1
+                                    print(f"    Frame {frame_idx}: Error - {result.error[:50]}")
+                                else:
+                                    total_analyzed += 1
+                                    det_count = len(result.detections)
+                                    print(
+                                        f"    Frame {frame_idx}: {det_count} detection(s), "
+                                        f"scene: {result.scene_summary[:40]}..."
+                                    )
+                            except Exception as e:
+                                print(f"    Frame {frame_idx}: Exception - {e}")
+                                total_failed += 1
+
+                            frames_processed += 1
+                            emit_progress(
+                                frames_processed,
+                                total_frames_to_process,
+                                "frames",
+                                "Analyzing frames",
                             )
+                else:
+                    # Sequential processing (backward compatible)
+                    for frame_idx, image_path, frame_meta in frame_tasks:
+                        try:
+                            result = engine.analyze(
+                                image_path=image_path,
+                                event=event,
+                                frame_meta=frame_meta,
+                            )
+                            results[frame_idx] = result
 
-                    except Exception as e:
-                        print(f"    Frame {frame_idx}: Exception - {e}")
-                        total_failed += 1
+                            if result.error:
+                                total_failed += 1
+                                print(f"    Frame {frame_idx}: Error - {result.error[:50]}")
+                            else:
+                                total_analyzed += 1
+                                det_count = len(result.detections)
+                                print(
+                                    f"    Frame {frame_idx}: {det_count} detection(s), "
+                                    f"scene: {result.scene_summary[:40]}..."
+                                )
+                        except Exception as e:
+                            print(f"    Frame {frame_idx}: Exception - {e}")
+                            total_failed += 1
 
-                    frames_processed += 1
+                        frames_processed += 1
+                        emit_progress(
+                            frames_processed,
+                            total_frames_to_process,
+                            "frames",
+                            "Analyzing frames",
+                        )
 
-                    # Emit structured progress for pipeline executor
-                    emit_progress(
-                        frames_processed,
-                        total_frames_to_process,
-                        "frames",
-                        "Analyzing frames",
-                    )
+                        # Rate limiting (only for sequential mode)
+                        if (
+                            frame_idx < len(frame_tasks) - 1
+                            and config.sleep_ms_between_requests > 0
+                        ):
+                            time.sleep(config.sleep_ms_between_requests / 1000)
 
-                    # Rate limiting
-                    if (
-                        frame_idx < len(frames_to_analyze) - 1
-                        and config.sleep_ms_between_requests > 0
-                    ):
-                        time.sleep(config.sleep_ms_between_requests / 1000)
+                # Filter out None results (from failed frames)
+                valid_results: list[FrameAnalyticsResult] = [
+                    r for r in results if r is not None
+                ]
 
                 # Aggregate results for this event
                 summary = aggregate_event_results(
-                    results=results,
+                    results=valid_results,
                     event_id=efs.event_id,
                     engine_info=engine_info,
                     source_manifest=str(manifest_path),
@@ -377,7 +437,7 @@ def main(args: list[str] | None = None) -> int:
                 event_out_dir = create_event_output_dir(
                     output_dir, efs.event_id, event_title
                 )
-                write_event_analytics(event_out_dir, results, summary)
+                write_event_analytics(event_out_dir, valid_results, summary)
                 all_summaries.append(summary)
 
                 # Print event summary

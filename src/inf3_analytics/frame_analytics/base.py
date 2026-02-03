@@ -19,6 +19,9 @@ class AnalyticsConfig:
     sleep_ms_between_requests: int = 200
     max_total_frames: int = 100
 
+    # Parallelism
+    parallel_workers: int = 8
+
     # Retry settings
     max_retries: int = 2
     retry_delay_ms: int = 1000
@@ -39,6 +42,7 @@ class AnalyticsConfig:
             "max_frames_per_event": self.max_frames_per_event,
             "sleep_ms_between_requests": self.sleep_ms_between_requests,
             "max_total_frames": self.max_total_frames,
+            "parallel_workers": self.parallel_workers,
             "max_retries": self.max_retries,
             "retry_delay_ms": self.retry_delay_ms,
             "temperature": self.temperature,
