@@ -164,18 +164,18 @@ export default function RunDetailPage({ params }: PageProps) {
       {/* Header */}
       <header className="border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <Link
               href="/runs"
               className="text-gray-600 hover:text-gray-900"
             >
               &larr; Runs
             </Link>
-            <div>
-              <h1 className="font-mono text-lg font-medium text-gray-900">
+            <div className="min-w-0">
+              <h1 className="break-all font-mono text-lg font-medium text-gray-900">
                 {run.run_id}
               </h1>
-              <p className="text-sm text-gray-500">{run.video_basename}</p>
+              <p className="break-words text-sm text-gray-500">{run.video_basename}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

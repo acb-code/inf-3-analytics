@@ -227,6 +227,10 @@ export interface PipelineStepInfo {
   completed_at: string | null;
   error_message: string | null;
   output: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+  progress_unit: string | null;
+  progress_message: string | null;
 }
 
 // Response from GET /runs/{run_id}/pipeline/status
@@ -251,4 +255,9 @@ export interface TriggerPipelineRequest {
   transcription_engine?: string;
   event_engine?: string;
   frame_analytics_engine?: string;
+}
+
+export interface DeleteRunResponse {
+  message: string;
+  run_id: string;
 }

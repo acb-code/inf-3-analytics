@@ -1,6 +1,7 @@
 """Background pipeline executor for running analytics steps."""
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -29,6 +30,10 @@ ENGINE_EXTRAS: dict[str, list[str]] = {
 # Track running processes for cancellation
 _running_processes: dict[str, subprocess.Popen[str]] = {}
 _process_lock = Lock()
+
+_FRAME_TOTAL_RE = re.compile(r"Frames to process:\s*(\d+)")
+_FRAME_LINE_RE = re.compile(r"^\s*Frame\s+\d+:", re.MULTILINE)
+_EXTRACT_EVENT_RE = re.compile(r"\[(\d+)/(\d+)\]\s+Extracting frames for:", re.MULTILINE)
 
 
 def _register_process(run_id: str, process: subprocess.Popen[str]) -> None:
@@ -427,9 +432,43 @@ def _make_output_callback(
         Callback function that updates step output
     """
 
+    def _extract_progress(output: str) -> tuple[int | None, int | None, str | None, str | None]:
+        """Extract progress details from step output."""
+        if step == PipelineStep.FRAME_ANALYTICS:
+            total_match = None
+            for match in _FRAME_TOTAL_RE.finditer(output):
+                total_match = match
+            if total_match is None:
+                return None, None, None, None
+            total = int(total_match.group(1))
+            current = len(_FRAME_LINE_RE.findall(output))
+            if current > total:
+                current = total
+            return current, total, "frames", "Analyzing frames"
+
+        if step == PipelineStep.EXTRACT_FRAMES:
+            progress_match = None
+            for match in _EXTRACT_EVENT_RE.finditer(output):
+                progress_match = match
+            if progress_match is None:
+                return None, None, None, None
+            current = int(progress_match.group(1))
+            total = int(progress_match.group(2))
+            return current, total, "events", "Extracting frames"
+
+        return None, None, None, None
+
     def callback(output: str) -> None:
-        # Update output while keeping status as RUNNING
-        registry.update_step_status(run_id, step, StepStatus.RUNNING, output=output)
+        progress_current, progress_total, progress_unit, progress_message = _extract_progress(output)
+        registry.update_step_progress(
+            run_id,
+            step,
+            progress_current=progress_current,
+            progress_total=progress_total,
+            progress_unit=progress_unit,
+            progress_message=progress_message,
+            output=output,
+        )
 
     return callback
 

@@ -38,13 +38,18 @@ def _calculate_progress(steps: list[PipelineStepInfo]) -> int:
         return 0
 
     total = len(steps)
-    completed = sum(
-        1 for s in steps if s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED)
-    )
-    # Count running step as half done
-    running = sum(1 for s in steps if s.status == StepStatus.RUNNING)
+    progress_sum = 0.0
+    for step in steps:
+        if step.status in (StepStatus.COMPLETED, StepStatus.SKIPPED):
+            progress_sum += 1.0
+        elif step.status == StepStatus.RUNNING:
+            if step.progress_total and step.progress_total > 0 and step.progress_current is not None:
+                fraction = min(step.progress_current / step.progress_total, 1.0)
+                progress_sum += fraction
+            else:
+                progress_sum += 0.5
 
-    progress = (completed + running * 0.5) / total * 100
+    progress = (progress_sum / total) * 100
     return int(progress)
 
 
@@ -209,6 +214,65 @@ def run_single_step(
         "run_id": run.run_id,
         "step": step_name,
         "status_url": f"/runs/{run.run_id}/pipeline/status",
+    }
+
+
+@router.post("/step/{step_name}/cancel", status_code=status.HTTP_200_OK)
+def cancel_running_step(
+    step_name: str,
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    registry: Annotated[RunRegistry, Depends(get_registry)],
+) -> dict[str, str]:
+    """Cancel a running pipeline step."""
+    # Validate step name
+    try:
+        step = PipelineStep(step_name)
+    except ValueError:
+        valid_steps = [s.value for s in PipelineStep]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid step '{step_name}'. Valid steps: {valid_steps}",
+        ) from None
+
+    if run.status != RunStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pipeline is not running",
+        )
+
+    steps = registry.get_pipeline_steps(run.run_id)
+    running_step = next((s for s in steps if s.status == StepStatus.RUNNING), None)
+    if running_step is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No running step found",
+        )
+
+    if running_step.step != step:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Step '{running_step.step.value}' is running, not '{step_name}'",
+        )
+
+    cancelled = cancel_pipeline(run.run_id)
+    if cancelled:
+        registry.update_status(run.run_id, RunStatus.FAILED)
+        registry.update_step_status(
+            run.run_id,
+            step,
+            StepStatus.FAILED,
+            error_message="Cancelled by user",
+        )
+        return {
+            "message": f"Step '{step_name}' cancelled",
+            "run_id": run.run_id,
+            "step": step_name,
+        }
+
+    return {
+        "message": "No running process found (may have already completed)",
+        "run_id": run.run_id,
+        "step": step_name,
     }
 
 

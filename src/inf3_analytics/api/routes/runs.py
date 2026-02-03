@@ -18,6 +18,7 @@ from inf3_analytics.api.models import (
     RunDetailResponse,
     RunListResponse,
     RunMetadata,
+    RunStatus,
 )
 from inf3_analytics.api.registry import RunRegistry
 
@@ -130,3 +131,25 @@ def get_run(
     """Get details for a specific run."""
     artifacts = _detect_artifacts(run, settings)
     return RunDetailResponse(run=run, artifacts=artifacts)
+
+
+@router.delete("/{run_id}", status_code=status.HTTP_200_OK)
+def delete_run(
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    registry: Annotated[RunRegistry, Depends(get_registry)],
+) -> dict[str, str]:
+    """Delete a run from the registry."""
+    if run.status == RunStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a running pipeline",
+        )
+
+    deleted = registry.delete_run(run.run_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run {run.run_id} not found",
+        )
+
+    return {"message": "Run deleted", "run_id": run.run_id}

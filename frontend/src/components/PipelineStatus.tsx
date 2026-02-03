@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import type { PipelineStatusResponse, PipelineStepInfo, StepStatus } from "@/types/api";
+import type { PipelineStatusResponse, PipelineStep, PipelineStepInfo, StepStatus } from "@/types/api";
 
 interface PipelineStatusProps {
   runId: string;
@@ -70,14 +70,27 @@ function StepRow({
   step,
   expanded,
   onToggle,
+  onCancel,
+  canceling,
 }: {
   step: PipelineStepInfo;
   expanded: boolean;
   onToggle: () => void;
+  onCancel?: () => void;
+  canceling?: boolean;
 }) {
   const label = STEP_LABELS[step.step] || step.step;
   const hasOutput = step.output || step.error_message;
   const isClickable = hasOutput || step.status === "running";
+  const hasProgress =
+    step.progress_total !== null &&
+    step.progress_total !== undefined &&
+    step.progress_total > 0 &&
+    step.progress_current !== null &&
+    step.progress_current !== undefined;
+  const progressPercent = hasProgress
+    ? Math.min(100, Math.round((step.progress_current! / step.progress_total!) * 100))
+    : 0;
 
   return (
     <div>
@@ -93,6 +106,20 @@ function StepRow({
               <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Running...</span>
             )}
           </div>
+          {hasProgress && (
+            <div className="mt-1 text-xs text-gray-600">
+              {step.progress_message || "Progress"}: {step.progress_current} / {step.progress_total}{" "}
+              {step.progress_unit || "items"}
+            </div>
+          )}
+          {hasProgress && (
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          )}
           {step.status === "completed" && step.completed_at && (
             <div className="text-xs text-gray-500">
               Completed {new Date(step.completed_at).toLocaleTimeString()}
@@ -102,6 +129,18 @@ function StepRow({
             <div className="text-xs text-red-600">Failed - click to see details</div>
           )}
         </div>
+        {step.status === "running" && onCancel && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancel();
+            }}
+            className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+            disabled={canceling}
+          >
+            {canceling ? "Cancelling..." : "Cancel"}
+          </button>
+        )}
         {hasOutput && <ChevronIcon expanded={expanded} />}
       </div>
 
@@ -132,6 +171,8 @@ function StepRow({
 export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval = 2000 }: PipelineStatusProps) {
   const [status, setStatus] = useState<PipelineStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [cancelingStep, setCancelingStep] = useState<PipelineStep | null>(null);
   const [polling, setPolling] = useState(true);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
 
@@ -152,6 +193,7 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
       const data = await api.getPipelineStatus(runId);
       setStatus(data);
       setError(null);
+      setActionError(null);
 
       // Notify parent of status update
       onStatusUpdate?.(data);
@@ -182,6 +224,22 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
       setError(err instanceof Error ? err.message : "Failed to fetch status");
     }
   }, [runId, onComplete, onStatusUpdate]);
+
+  const handleCancelStep = useCallback(
+    async (step: PipelineStep) => {
+      setActionError(null);
+      setCancelingStep(step);
+      try {
+        await api.cancelPipelineStep(runId, step);
+        await fetchStatus();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Failed to cancel step");
+      } finally {
+        setCancelingStep(null);
+      }
+    },
+    [runId, fetchStatus]
+  );
 
   useEffect(() => {
     fetchStatus();
@@ -235,6 +293,12 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
         </div>
       </div>
 
+      {actionError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
+
       {/* Steps list */}
       <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
         {status.steps.map((step) => (
@@ -243,6 +307,12 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
               step={step}
               expanded={expandedSteps.has(step.step)}
               onToggle={() => toggleStep(step.step)}
+              onCancel={
+                step.status === "running"
+                  ? () => handleCancelStep(step.step)
+                  : undefined
+              }
+              canceling={cancelingStep === step.step}
             />
           </div>
         ))}

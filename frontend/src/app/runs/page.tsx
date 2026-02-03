@@ -11,6 +11,8 @@ export default function RunsPage() {
   const [runs, setRuns] = useState<RunMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,6 +49,24 @@ export default function RunsPage() {
     );
   }
 
+  const handleDeleteRun = async (run: RunMetadata) => {
+    setActionError(null);
+    const confirmed = window.confirm(
+      `Delete run ${run.run_id}? This only removes it from the registry.`
+    );
+    if (!confirmed) return;
+
+    setDeletingRunId(run.run_id);
+    try {
+      await api.deleteRun(run.run_id);
+      setRuns((prev) => prev.filter((item) => item.run_id !== run.run_id));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete run");
+    } finally {
+      setDeletingRunId(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl p-6">
       <header className="mb-6 flex items-start justify-between">
@@ -62,6 +82,12 @@ export default function RunsPage() {
         </Link>
       </header>
 
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
+
       {runs.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
           No runs found. Process a video to get started.
@@ -69,7 +95,12 @@ export default function RunsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {runs.map((run) => (
-            <RunCard key={run.run_id} run={run} />
+            <RunCard
+              key={run.run_id}
+              run={run}
+              onDelete={handleDeleteRun}
+              deleting={deletingRunId === run.run_id}
+            />
           ))}
         </div>
       )}

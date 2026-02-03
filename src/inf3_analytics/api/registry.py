@@ -64,6 +64,10 @@ class RunRegistry:
                     completed_at TEXT,
                     error_message TEXT,
                     output TEXT,
+                    progress_current INTEGER,
+                    progress_total INTEGER,
+                    progress_unit TEXT,
+                    progress_message TEXT,
                     FOREIGN KEY (run_id) REFERENCES runs(run_id),
                     UNIQUE(run_id, step)
                 )
@@ -74,6 +78,28 @@ class RunRegistry:
                 conn.execute("ALTER TABLE pipeline_steps ADD COLUMN output TEXT")
             except Exception:
                 pass  # Column already exists
+            try:
+                conn.execute(
+                    "ALTER TABLE pipeline_steps ADD COLUMN progress_current INTEGER"
+                )
+            except Exception:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE pipeline_steps ADD COLUMN progress_total INTEGER"
+                )
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE pipeline_steps ADD COLUMN progress_unit TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE pipeline_steps ADD COLUMN progress_message TEXT"
+                )
+            except Exception:
+                pass
 
     def _is_sqlite_file(self) -> bool:
         if not self._path.exists():
@@ -237,6 +263,27 @@ class RunRegistry:
                 for row in rows
             ]
 
+    def delete_run(self, run_id: str) -> bool:
+        """Delete a run and its pipeline steps from the registry.
+
+        Args:
+            run_id: The run identifier
+
+        Returns:
+            True if the run was deleted, False if not found
+        """
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "DELETE FROM pipeline_steps WHERE run_id = ?",
+                    (run_id,),
+                )
+                cur = conn.execute(
+                    "DELETE FROM runs WHERE run_id = ?",
+                    (run_id,),
+                )
+                return cur.rowcount > 0
+
     def update_status(self, run_id: str, status: RunStatus) -> bool:
         """Update the status of a run.
 
@@ -301,7 +348,9 @@ class RunRegistry:
                     cur = conn.execute(
                         """
                         UPDATE pipeline_steps
-                        SET status = ?, started_at = ?, error_message = NULL, output = NULL
+                        SET status = ?, started_at = ?, error_message = NULL, output = NULL,
+                            progress_current = NULL, progress_total = NULL,
+                            progress_unit = NULL, progress_message = NULL
                         WHERE run_id = ? AND step = ?
                         """,
                         (status.value, now, run_id, step.value),
@@ -326,6 +375,54 @@ class RunRegistry:
                     )
                 return cur.rowcount > 0
 
+    def update_step_progress(
+        self,
+        run_id: str,
+        step: PipelineStep,
+        progress_current: int | None = None,
+        progress_total: int | None = None,
+        progress_unit: str | None = None,
+        progress_message: str | None = None,
+        output: str | None = None,
+    ) -> bool:
+        """Update progress information for a running pipeline step.
+
+        Args:
+            run_id: The run identifier
+            step: The pipeline step
+            progress_current: Current progress count
+            progress_total: Total progress count
+            progress_unit: Unit label (e.g., frames, events)
+            progress_message: Optional progress message
+            output: Optional stdout/stderr output snapshot
+
+        Returns:
+            True if updated, False if step not found
+        """
+        with self._lock:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    """
+                    UPDATE pipeline_steps
+                    SET progress_current = COALESCE(?, progress_current),
+                        progress_total = COALESCE(?, progress_total),
+                        progress_unit = COALESCE(?, progress_unit),
+                        progress_message = COALESCE(?, progress_message),
+                        output = COALESCE(?, output)
+                    WHERE run_id = ? AND step = ?
+                    """,
+                    (
+                        progress_current,
+                        progress_total,
+                        progress_unit,
+                        progress_message,
+                        output,
+                        run_id,
+                        step.value,
+                    ),
+                )
+                return cur.rowcount > 0
+
     def get_pipeline_steps(self, run_id: str) -> list[PipelineStepInfo]:
         """Get all pipeline steps for a run.
 
@@ -339,7 +436,8 @@ class RunRegistry:
             with self._connect() as conn:
                 rows = conn.execute(
                     """
-                    SELECT step, status, started_at, completed_at, error_message, output
+                    SELECT step, status, started_at, completed_at, error_message, output,
+                           progress_current, progress_total, progress_unit, progress_message
                     FROM pipeline_steps
                     WHERE run_id = ?
                     ORDER BY id
@@ -363,6 +461,10 @@ class RunRegistry:
                     ),
                     error_message=row["error_message"],
                     output=row["output"],
+                    progress_current=row["progress_current"],
+                    progress_total=row["progress_total"],
+                    progress_unit=row["progress_unit"],
+                    progress_message=row["progress_message"],
                 )
                 for row in rows
             ]

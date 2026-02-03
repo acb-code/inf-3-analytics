@@ -8,6 +8,7 @@ import type {
   UploadResponse,
   TriggerPipelineRequest,
   PipelineStep,
+  DeleteRunResponse,
 } from "@/types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_INF3_API_BASE || "http://localhost:8000";
@@ -143,6 +144,31 @@ export const api = {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new Error(error.detail || `Failed to cancel pipeline: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  cancelPipelineStep: async (
+    runId: string,
+    stepName: PipelineStep
+  ): Promise<{ message: string; run_id: string; step: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/pipeline/step/${stepName}/cancel`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to cancel step: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  deleteRun: async (runId: string): Promise<DeleteRunResponse> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to delete run: ${res.status}`);
     }
     return res.json();
   },

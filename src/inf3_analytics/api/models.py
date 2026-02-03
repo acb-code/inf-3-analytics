@@ -154,6 +154,10 @@ class PipelineStepInfo(BaseModel):
     completed_at: datetime | None = None
     error_message: str | None = None
     output: str | None = None
+    progress_current: int | None = None
+    progress_total: int | None = None
+    progress_unit: str | None = None
+    progress_message: str | None = None
 
 
 class PipelineStatusResponse(BaseModel):
