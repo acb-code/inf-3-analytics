@@ -11,7 +11,8 @@ import type {
   DeleteRunResponse,
 } from "@/types/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_INF3_API_BASE || "http://localhost:8000";
+// Treat an explicitly-empty NEXT_PUBLIC_INF3_API_BASE as "same-origin" (root-relative paths).
+const API_BASE = process.env.NEXT_PUBLIC_INF3_API_BASE ?? "http://localhost:8000";
 const DEFAULT_TIMEOUT_MS = 10000;
 
 export interface FetchOptions {
