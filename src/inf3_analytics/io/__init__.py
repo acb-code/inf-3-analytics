@@ -1,10 +1,17 @@
 """Input/output utilities for the analytics pipeline."""
 
+from inf3_analytics.io.analytics_writer import read_analytics_manifest
+from inf3_analytics.io.comment_writer import (
+    add_comment,
+    delete_comment,
+    get_comments_for_event,
+    read_comments,
+    write_comments,
+)
 from inf3_analytics.io.event_writer import read_json as read_events_json
 from inf3_analytics.io.event_writer import write_json as write_events_json
 from inf3_analytics.io.event_writer import write_markdown as write_events_markdown
 from inf3_analytics.io.event_writer import write_ndjson as write_events_ndjson
-from inf3_analytics.io.analytics_writer import read_analytics_manifest
 from inf3_analytics.io.frame_manifest_writer import (
     read_event_frames_json,
     read_manifest,
@@ -36,4 +43,10 @@ __all__ = [
     "write_manifest",
     # Analytics IO
     "read_analytics_manifest",
+    # Comment IO
+    "add_comment",
+    "delete_comment",
+    "get_comments_for_event",
+    "read_comments",
+    "write_comments",
 ]

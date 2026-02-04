@@ -300,3 +300,32 @@ class DecompositionJobResponse(BaseModel):
     job_id: str
     message: str
     status_url: str
+
+
+# Event management models
+
+
+class CreateEventRequest(BaseModel):
+    """Request to create a manual event."""
+
+    start_s: float = Field(..., description="Start time in seconds")
+    end_s: float = Field(..., description="End time in seconds")
+    event_type: str = Field(..., description="Event type (e.g., observation, structural_anomaly)")
+    severity: str | None = Field(None, description="Severity level (low, medium, high)")
+    title: str = Field(..., description="Event title")
+    summary: str = Field(..., description="Event summary/description")
+
+
+class CreateCommentRequest(BaseModel):
+    """Request to create a comment on an event."""
+
+    text: str = Field(..., description="Comment text")
+
+
+class EventCommentResponse(BaseModel):
+    """Response for a single comment."""
+
+    comment_id: str
+    event_id: str
+    text: str
+    created_at: str

@@ -58,6 +58,7 @@ export interface Event {
     extractor_version: string;
     created_at: string;
     source_transcript_path: string;
+    source?: "auto" | "manual";
   };
   related_rule_events: unknown | null;
 }
@@ -337,4 +338,26 @@ export interface DecompositionJobResponse {
   job_id: string;
   message: string;
   status_url: string;
+}
+
+// Event management types
+
+export interface CreateEventRequest {
+  start_s: number;
+  end_s: number;
+  event_type: EventType;
+  severity?: Severity | null;
+  title: string;
+  summary: string;
+}
+
+export interface CreateCommentRequest {
+  text: string;
+}
+
+export interface EventComment {
+  comment_id: string;
+  event_id: string;
+  text: string;
+  created_at: string;
 }

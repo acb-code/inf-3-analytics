@@ -10,20 +10,28 @@ interface EventCardProps {
   event: Event;
   isActive: boolean;
   hasFrames?: boolean;
+  commentCount?: number;
   onClick: () => void;
   onViewFrames?: () => void;
+  onDelete?: () => void;
+  onViewComments?: () => void;
 }
 
 export function EventCard({
   event,
   isActive,
   hasFrames,
+  commentCount,
   onClick,
   onViewFrames,
+  onDelete,
+  onViewComments,
 }: EventCardProps) {
+  const isManual = event.metadata?.source === "manual";
+
   return (
     <div
-      className={`rounded-lg border p-3 transition-all ${
+      className={`group rounded-lg border p-3 transition-all ${
         isActive
           ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
           : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
@@ -45,6 +53,26 @@ export function EventCard({
           >
             {event.severity}
           </span>
+        )}
+        {isManual && (
+          <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-xs font-medium text-purple-700">
+            Manual
+          </span>
+        )}
+        {/* Delete button - shows on hover */}
+        {onDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="ml-auto rounded p-0.5 text-gray-400 opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+            title="Delete event"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -69,6 +97,24 @@ export function EventCard({
         >
           Go to time
         </button>
+        {onViewComments && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewComments();
+            }}
+            className="flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+          >
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            {commentCount !== undefined && commentCount > 0 && (
+              <span className="rounded-full bg-blue-600 px-1.5 text-[10px] text-white">
+                {commentCount}
+              </span>
+            )}
+          </button>
+        )}
         {hasFrames && onViewFrames && (
           <button
             onClick={(e) => {
@@ -80,7 +126,7 @@ export function EventCard({
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            View Frames
+            Frames
           </button>
         )}
       </div>

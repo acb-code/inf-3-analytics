@@ -8,16 +8,24 @@ interface EventListProps {
   events: Event[];
   currentTime: number;
   eventFrameSets?: EventFrameSet[];
+  commentCounts?: Record<string, number>;
   onEventClick: (event: Event) => void;
   onViewFrames?: (event: Event, frameSet: EventFrameSet) => void;
+  onAddEvent?: () => void;
+  onDeleteEvent?: (event: Event) => void;
+  onViewComments?: (event: Event) => void;
 }
 
 export function EventList({
   events,
   currentTime,
   eventFrameSets,
+  commentCounts,
   onEventClick,
   onViewFrames,
+  onAddEvent,
+  onDeleteEvent,
+  onViewComments,
 }: EventListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -72,8 +80,23 @@ export function EventList({
 
   if (events.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-500">
-        No events found
+      <div className="flex h-full flex-col">
+        {onAddEvent && (
+          <div className="border-b border-gray-200 p-2">
+            <button
+              onClick={onAddEvent}
+              className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Event
+            </button>
+          </div>
+        )}
+        <div className="flex flex-1 items-center justify-center text-gray-500">
+          No events found
+        </div>
       </div>
     );
   }
@@ -81,6 +104,17 @@ export function EventList({
   return (
     <div ref={containerRef} className="h-full overflow-y-auto">
       <div className="space-y-2 p-2">
+        {onAddEvent && (
+          <button
+            onClick={onAddEvent}
+            className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Event
+          </button>
+        )}
         {events.map((event) => {
           const isActive = event.event_id === activeEventId;
           const frameSet = findFrameSetForEvent(event);
@@ -90,12 +124,15 @@ export function EventList({
                 event={event}
                 isActive={isActive}
                 hasFrames={!!frameSet && frameSet.frames.length > 0}
+                commentCount={commentCounts?.[event.event_id]}
                 onClick={() => onEventClick(event)}
                 onViewFrames={
                   frameSet && onViewFrames
                     ? () => onViewFrames(event, frameSet)
                     : undefined
                 }
+                onDelete={onDeleteEvent ? () => onDeleteEvent(event) : undefined}
+                onViewComments={onViewComments ? () => onViewComments(event) : undefined}
               />
             </div>
           );

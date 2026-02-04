@@ -14,6 +14,10 @@ import type {
   ExecuteDecompositionRequest,
   DecompositionJobResponse,
   DecompositionStatusResponse,
+  CreateEventRequest,
+  CreateCommentRequest,
+  EventComment,
+  Event,
 } from "@/types/api";
 
 // Treat an explicitly-empty NEXT_PUBLIC_INF3_API_BASE as "same-origin" (root-relative paths).
@@ -303,5 +307,66 @@ export const api = {
     return () => {
       eventSource.close();
     };
+  },
+
+  // Event management
+  createEvent: async (runId: string, request: CreateEventRequest): Promise<Event> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to create event: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  deleteEvent: async (runId: string, eventId: string): Promise<{ message: string; event_id: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/events/${eventId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to delete event: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  getComments: async (runId: string, eventId: string, options?: FetchOptions): Promise<EventComment[]> => {
+    return fetchJson<EventComment[]>(`/runs/${runId}/events/${eventId}/comments`, options);
+  },
+
+  createComment: async (
+    runId: string,
+    eventId: string,
+    request: CreateCommentRequest
+  ): Promise<EventComment> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/events/${eventId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to create comment: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  deleteComment: async (
+    runId: string,
+    eventId: string,
+    commentId: string
+  ): Promise<{ message: string; comment_id: string }> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/events/${eventId}/comments/${commentId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to delete comment: ${res.status}`);
+    }
+    return res.json();
   },
 };

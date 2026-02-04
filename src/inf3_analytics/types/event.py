@@ -71,6 +71,7 @@ class EventMetadata:
     extractor_version: str
     created_at: str
     source_transcript_path: str | None
+    source: str = "auto"  # "auto" | "manual"
 
     def to_dict(self) -> dict[str, str | None]:
         """Convert to dictionary for serialization."""
@@ -79,6 +80,7 @@ class EventMetadata:
             "extractor_version": self.extractor_version,
             "created_at": self.created_at,
             "source_transcript_path": self.source_transcript_path,
+            "source": self.source,
         }
 
     @classmethod
@@ -93,6 +95,7 @@ class EventMetadata:
                 if data.get("source_transcript_path")
                 else None
             ),
+            source=str(data.get("source", "auto")),
         )
 
 

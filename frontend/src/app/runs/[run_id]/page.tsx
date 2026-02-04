@@ -3,12 +3,14 @@
 import { useEffect, useState, useRef, use, useCallback } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { RunDetailResponse, Event, EventFrameSet, PipelineStatusResponse, PipelineStep } from "@/types/api";
+import type { RunDetailResponse, Event, EventFrameSet, PipelineStatusResponse, PipelineStep, CreateEventRequest } from "@/types/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { EventList } from "@/components/EventList";
 import { EventFrameViewer } from "@/components/EventFrameViewer";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { PipelineStatus } from "@/components/PipelineStatus";
+import { AddEventModal } from "@/components/AddEventModal";
+import { EventComments } from "@/components/EventComments";
 
 interface PageProps {
   params: Promise<{ run_id: string }>;
@@ -40,6 +42,10 @@ export default function RunDetailPage({ params }: PageProps) {
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatusResponse | null>(null);
   const [showPipeline, setShowPipeline] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [selectedEventForComments, setSelectedEventForComments] = useState<Event | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -116,6 +122,35 @@ export default function RunDetailPage({ params }: PageProps) {
   const handlePipelineStatusUpdate = useCallback((status: PipelineStatusResponse) => {
     setPipelineStatus(status);
   }, []);
+
+  const handleAddEvent = () => {
+    setShowAddEventModal(true);
+  };
+
+  const handleCreateEvent = async (request: CreateEventRequest) => {
+    await api.createEvent(run_id, request);
+    // Refresh events
+    const eventsData = await api.getEvents(run_id).catch(() => ({ events: [] }));
+    setEvents(eventsData.events || []);
+  };
+
+  const handleDeleteEvent = async (event: Event) => {
+    if (!confirm(`Delete event "${event.title}"?`)) return;
+    try {
+      await api.deleteEvent(run_id, event.event_id);
+      setEvents(events.filter((e) => e.event_id !== event.event_id));
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+  };
+
+  const handleViewComments = (event: Event) => {
+    setSelectedEventForComments(event);
+  };
+
+  const handleVideoDuration = (duration: number) => {
+    setVideoDuration(duration);
+  };
 
   const isStepEnabled = (step: PipelineStep): boolean => {
     if (!pipelineStatus) return step === "transcribe";
@@ -241,11 +276,12 @@ export default function RunDetailPage({ params }: PageProps) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Video section - 2/3 width on desktop */}
-        <div className="h-[50vh] lg:h-auto lg:flex-1 bg-gray-900 p-4 lg:w-2/3">
+        <div className="min-h-[200px] h-[50vh] lg:h-auto lg:flex-1 bg-gray-900 p-2 sm:p-4 lg:w-2/3">
           <VideoPlayer
             ref={videoRef}
             src={api.getVideoUrl(run_id)}
             onTimeUpdate={setCurrentTime}
+            onDurationChange={handleVideoDuration}
           />
         </div>
 
@@ -261,8 +297,12 @@ export default function RunDetailPage({ params }: PageProps) {
               events={events}
               currentTime={currentTime}
               eventFrameSets={eventFrameSets}
+              commentCounts={commentCounts}
               onEventClick={handleEventClick}
               onViewFrames={handleViewFrames}
+              onAddEvent={handleAddEvent}
+              onDeleteEvent={handleDeleteEvent}
+              onViewComments={handleViewComments}
             />
           </div>
         </div>
@@ -279,6 +319,25 @@ export default function RunDetailPage({ params }: PageProps) {
             />
           </div>
         </div>
+      )}
+
+      {/* Add event modal */}
+      {showAddEventModal && (
+        <AddEventModal
+          currentTime={currentTime}
+          videoDuration={videoDuration}
+          onSubmit={handleCreateEvent}
+          onClose={() => setShowAddEventModal(false)}
+        />
+      )}
+
+      {/* Comments modal */}
+      {selectedEventForComments && (
+        <EventComments
+          runId={run_id}
+          event={selectedEventForComments}
+          onClose={() => setSelectedEventForComments(null)}
+        />
       )}
     </div>
   );

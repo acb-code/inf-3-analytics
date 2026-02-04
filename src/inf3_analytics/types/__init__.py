@@ -1,5 +1,6 @@
 """Core type definitions for the analytics pipeline."""
 
+from inf3_analytics.types.comment import CommentStore, EventComment
 from inf3_analytics.types.event import (
     Event,
     EventList,
@@ -27,7 +28,9 @@ from inf3_analytics.types.transcript import (
 
 __all__ = [
     "AudioInfo",
+    "CommentStore",
     "Event",
+    "EventComment",
     "EventFrameSet",
     "EventList",
     "EventMetadata",
