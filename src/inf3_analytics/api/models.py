@@ -194,3 +194,109 @@ class TriggerPipelineRequest(BaseModel):
     frame_analytics_engine: str = Field(
         default="gemini", description="Frame analytics engine: gemini, openai, baseline_quality"
     )
+
+
+# Decomposition models
+
+
+class SplitPointResponse(BaseModel):
+    """A suggested split point."""
+
+    timestamp_s: float
+    timestamp_ts: str
+    type: str  # "silence", "scene", "interval", "user"
+    keyframe_s: float
+    confidence: float
+
+
+class SegmentPreview(BaseModel):
+    """Preview of a segment before decomposition."""
+
+    index: int
+    start_s: float
+    end_s: float
+    duration_s: float
+    start_ts: str
+    end_ts: str
+    estimated_size_mb: float
+
+
+class DecompositionPlanResponse(BaseModel):
+    """Response from analyzing a video for decomposition."""
+
+    video_path: str
+    duration_s: float
+    duration_ts: str
+    file_size_mb: float
+    suggested_splits: list[SplitPointResponse]
+    estimated_segments: list[SegmentPreview]
+
+
+class AnalyzeDecompositionRequest(BaseModel):
+    """Request to analyze a video for decomposition."""
+
+    video_path: str = Field(..., description="Path to the video file")
+    target_segment_duration_s: float = Field(
+        default=300, description="Target segment duration in seconds (default 5 min)"
+    )
+    silence_threshold_db: float = Field(
+        default=-35, description="Silence detection threshold in dB"
+    )
+
+
+class ExecuteDecompositionRequest(BaseModel):
+    """Request to execute video decomposition."""
+
+    video_path: str = Field(..., description="Path to the video file")
+    split_timestamps: list[float] = Field(
+        ..., description="Timestamps where to split the video"
+    )
+    create_child_runs: bool = Field(
+        default=True, description="Create separate runs for each segment"
+    )
+    parent_run_id: str | None = Field(
+        default=None, description="Parent run ID (optional)"
+    )
+
+
+class SegmentResultResponse(BaseModel):
+    """Result of creating a single segment."""
+
+    index: int
+    path: str
+    start_s: float
+    end_s: float
+    duration_s: float
+    file_size_mb: float
+    child_run_id: str | None
+
+
+class DecompositionJobStatus(str, Enum):
+    """Status of a decomposition job."""
+
+    ANALYZING = "analyzing"
+    SPLITTING = "splitting"
+    CREATING_RUNS = "creating_runs"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class DecompositionStatusResponse(BaseModel):
+    """Status of a decomposition job."""
+
+    job_id: str
+    status: DecompositionJobStatus
+    progress_current: int
+    progress_total: int
+    progress_message: str | None = None
+    segments_created: list[SegmentResultResponse] = []
+    child_run_ids: list[str] = []
+    error_message: str | None = None
+
+
+class DecompositionJobResponse(BaseModel):
+    """Response when starting a decomposition job."""
+
+    job_id: str
+    message: str
+    status_url: str

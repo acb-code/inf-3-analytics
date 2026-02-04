@@ -262,3 +262,79 @@ export interface DeleteRunResponse {
   message: string;
   run_id: string;
 }
+
+// Decomposition types
+
+export type DecompositionJobStatus =
+  | "analyzing"
+  | "splitting"
+  | "creating_runs"
+  | "completed"
+  | "failed";
+
+export interface SplitPoint {
+  timestamp_s: number;
+  timestamp_ts: string;
+  type: "silence" | "scene" | "interval" | "user";
+  keyframe_s: number;
+  confidence: number;
+}
+
+export interface SegmentPreview {
+  index: number;
+  start_s: number;
+  end_s: number;
+  duration_s: number;
+  start_ts: string;
+  end_ts: string;
+  estimated_size_mb: number;
+}
+
+export interface DecompositionPlanResponse {
+  video_path: string;
+  duration_s: number;
+  duration_ts: string;
+  file_size_mb: number;
+  suggested_splits: SplitPoint[];
+  estimated_segments: SegmentPreview[];
+}
+
+export interface AnalyzeDecompositionRequest {
+  video_path: string;
+  target_segment_duration_s?: number;
+  silence_threshold_db?: number;
+}
+
+export interface ExecuteDecompositionRequest {
+  video_path: string;
+  split_timestamps: number[];
+  create_child_runs?: boolean;
+  parent_run_id?: string | null;
+}
+
+export interface SegmentResult {
+  index: number;
+  path: string;
+  start_s: number;
+  end_s: number;
+  duration_s: number;
+  file_size_mb: number;
+  child_run_id: string | null;
+}
+
+export interface DecompositionStatusResponse {
+  job_id: string;
+  status: DecompositionJobStatus;
+  progress_current: number;
+  progress_total: number;
+  progress_message: string | null;
+  segments_created: SegmentResult[];
+  child_run_ids: string[];
+  error_message: string | null;
+}
+
+export interface DecompositionJobResponse {
+  job_id: string;
+  message: string;
+  status_url: string;
+}

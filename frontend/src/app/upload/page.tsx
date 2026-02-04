@@ -1,20 +1,64 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
 const MAX_SIZE_MB = 2048;
+const LONG_VIDEO_THRESHOLD_MINUTES = 30;
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
 
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [showDecomposePrompt, setShowDecomposePrompt] = useState(false);
+  const [dismissedPrompt, setDismissedPrompt] = useState(false);
+
+  // Check video duration when file changes
+  useEffect(() => {
+    if (!file) {
+      setVideoDuration(null);
+      setShowDecomposePrompt(false);
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.preload = "metadata";
+
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      const duration = video.duration;
+      setVideoDuration(duration);
+
+      // Show decompose prompt for long videos (unless already dismissed)
+      if (duration > LONG_VIDEO_THRESHOLD_MINUTES * 60 && !dismissedPrompt) {
+        setShowDecomposePrompt(true);
+      }
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      // Can't determine duration, proceed without prompt
+      setVideoDuration(null);
+    };
+
+    video.src = URL.createObjectURL(file);
+  }, [file, dismissedPrompt]);
 
   const validateFile = useCallback((file: File): string | null => {
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -43,6 +87,7 @@ export default function UploadPage() {
       e.stopPropagation();
       setDragActive(false);
       setError(null);
+      setDismissedPrompt(false);
 
       const droppedFile = e.dataTransfer.files?.[0];
       if (droppedFile) {
@@ -60,6 +105,7 @@ export default function UploadPage() {
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setError(null);
+      setDismissedPrompt(false);
       const selectedFile = e.target.files?.[0];
       if (selectedFile) {
         const err = validateFile(selectedFile);
@@ -94,7 +140,17 @@ export default function UploadPage() {
     setFile(null);
     setError(null);
     setProgress(0);
+    setVideoDuration(null);
+    setShowDecomposePrompt(false);
+    setDismissedPrompt(false);
   }, []);
+
+  const handleDismissPrompt = useCallback(() => {
+    setShowDecomposePrompt(false);
+    setDismissedPrompt(true);
+  }, []);
+
+  const isLongVideo = videoDuration !== null && videoDuration > LONG_VIDEO_THRESHOLD_MINUTES * 60;
 
   return (
     <div className="mx-auto max-w-2xl p-6">
@@ -107,6 +163,37 @@ export default function UploadPage() {
           Upload a video file to start the analytics pipeline
         </p>
       </header>
+
+      {/* Decompose link */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-start gap-3">
+          <svg
+            className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
+          </svg>
+          <div>
+            <p className="text-sm text-gray-700">
+              <strong>Have a long video?</strong> Split it into smaller segments first for
+              better reliability and parallel processing.
+            </p>
+            <Link
+              href="/decompose"
+              className="inline-block mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Go to Video Decomposition &rarr;
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* Dropzone */}
       <div
@@ -141,6 +228,9 @@ export default function UploadPage() {
               <p className="font-medium text-gray-900">{file.name}</p>
               <p className="text-sm text-gray-500">
                 {(file.size / (1024 * 1024)).toFixed(1)} MB
+                {videoDuration !== null && (
+                  <span> · {formatDuration(videoDuration)}</span>
+                )}
               </p>
             </div>
             {!uploading && (
@@ -188,6 +278,50 @@ export default function UploadPage() {
         )}
       </div>
 
+      {/* Long video decomposition prompt */}
+      {showDecomposePrompt && file && (
+        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <svg
+              className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                This video is {formatDuration(videoDuration!)} long
+              </p>
+              <p className="mt-1 text-sm text-amber-700">
+                Long videos may experience timeouts or failures during processing.
+                Consider splitting it into smaller segments first.
+              </p>
+              <div className="mt-3 flex gap-3">
+                <Link
+                  href="/decompose"
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-amber-600 rounded hover:bg-amber-700"
+                >
+                  Decompose Video
+                </Link>
+                <button
+                  onClick={handleDismissPrompt}
+                  className="px-3 py-1.5 text-sm text-amber-700 hover:text-amber-900"
+                >
+                  Continue anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error message */}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
@@ -224,6 +358,12 @@ export default function UploadPage() {
         >
           {uploading ? "Uploading..." : "Upload Video"}
         </button>
+        {isLongVideo && !showDecomposePrompt && (
+          <p className="mt-2 text-center text-xs text-gray-500">
+            This is a long video ({formatDuration(videoDuration!)}).
+            Processing may take a while.
+          </p>
+        )}
       </div>
     </div>
   );

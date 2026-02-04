@@ -9,6 +9,11 @@ import type {
   TriggerPipelineRequest,
   PipelineStep,
   DeleteRunResponse,
+  AnalyzeDecompositionRequest,
+  DecompositionPlanResponse,
+  ExecuteDecompositionRequest,
+  DecompositionJobResponse,
+  DecompositionStatusResponse,
 } from "@/types/api";
 
 // Treat an explicitly-empty NEXT_PUBLIC_INF3_API_BASE as "same-origin" (root-relative paths).
@@ -218,6 +223,83 @@ export const api = {
     });
 
     // Return cleanup function
+    return () => {
+      eventSource.close();
+    };
+  },
+
+  // Decomposition
+  analyzeForDecomposition: async (
+    request: AnalyzeDecompositionRequest
+  ): Promise<DecompositionPlanResponse> => {
+    const res = await fetch(`${API_BASE}/decompose/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to analyze video: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  executeDecomposition: async (
+    request: ExecuteDecompositionRequest
+  ): Promise<DecompositionJobResponse> => {
+    const res = await fetch(`${API_BASE}/decompose/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to start decomposition: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  getDecompositionStatus: (jobId: string, options?: FetchOptions) =>
+    fetchJson<DecompositionStatusResponse>(`/decompose/${jobId}/status`, options),
+
+  streamDecompositionStatus: (
+    jobId: string,
+    callbacks: {
+      onStatus?: (status: DecompositionStatusResponse) => void;
+      onDone?: (data: { status: string }) => void;
+      onError?: (error: Error) => void;
+    }
+  ): (() => void) => {
+    const url = `${API_BASE}/decompose/${jobId}/stream`;
+    const eventSource = new EventSource(url);
+
+    eventSource.addEventListener("status", (event) => {
+      try {
+        const data = JSON.parse(event.data) as DecompositionStatusResponse;
+        callbacks.onStatus?.(data);
+      } catch {
+        callbacks.onError?.(new Error("Failed to parse status event"));
+      }
+    });
+
+    eventSource.addEventListener("done", (event) => {
+      try {
+        const data = JSON.parse(event.data) as { status: string };
+        callbacks.onDone?.(data);
+      } catch {
+        callbacks.onError?.(new Error("Failed to parse done event"));
+      }
+      eventSource.close();
+    });
+
+    eventSource.addEventListener("error", () => {
+      if (eventSource.readyState === EventSource.CLOSED) {
+        return;
+      }
+      callbacks.onError?.(new Error("SSE connection error"));
+      eventSource.close();
+    });
+
     return () => {
       eventSource.close();
     };
