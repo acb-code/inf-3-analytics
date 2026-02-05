@@ -90,11 +90,11 @@ export INF3_MAX_UPLOAD_SIZE_MB=300
 uv run --extra cloud --extra api uvicorn inf3_analytics.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-### 2) Start the frontend (same-origin API)
+### 2) Start the frontend (same-origin API via /api)
 
 ```bash
 cd frontend
-export NEXT_PUBLIC_INF3_API_BASE=
+export NEXT_PUBLIC_INF3_API_BASE=/api
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
@@ -113,6 +113,25 @@ cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
 Share the printed `https://*.trycloudflare.com` URL and the basic-auth credentials with your tester.
+The frontend should load at `/runs`, and API calls go through `/api/*`.
+
+### One-command start/stop
+
+```bash
+BASIC_AUTH_PASS='your-strong-password' bash scripts/start-demo.sh
+```
+
+To stop everything:
+
+```bash
+bash scripts/stop-demo.sh
+```
+
+If you see a 502 from the tunnel, check the logs in `demo_data/logs/` to confirm the API, frontend, and Caddy all started successfully.
+If Caddy fails to start due to auth errors, unset `BASIC_AUTH_HASH` and use `BASIC_AUTH_PASS`.
+If the pipeline panel doesn't update over the tunnel, set `NEXT_PUBLIC_DISABLE_SSE=true` to force polling.
+If the page feels laggy from frequent status checks, set `NEXT_PUBLIC_POLL_INTERVAL_MS=5000` (or higher).
+If you see `API error: 404` in the dev overlay while viewing frames, it usually means that optional artifacts (like frame analytics) haven't been generated yet.
 
 ### Security notes
 

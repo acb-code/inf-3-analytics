@@ -11,6 +11,8 @@ interface PipelineStatusProps {
   pollInterval?: number;
   /** Use SSE streaming instead of polling (default: true) */
   useSSE?: boolean;
+  /** Fall back to polling if no SSE events within this window (ms) */
+  sseIdleTimeoutMs?: number;
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -170,7 +172,18 @@ function StepRow({
   );
 }
 
-export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval = 2000, useSSE = true }: PipelineStatusProps) {
+const DISABLE_SSE = process.env.NEXT_PUBLIC_DISABLE_SSE === "true";
+const POLL_INTERVAL_MS = Number(process.env.NEXT_PUBLIC_POLL_INTERVAL_MS ?? "5000") || 5000;
+const SSE_IDLE_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_SSE_IDLE_TIMEOUT_MS ?? "15000") || 15000;
+
+export function PipelineStatus({
+  runId,
+  onComplete,
+  onStatusUpdate,
+  pollInterval = POLL_INTERVAL_MS,
+  useSSE = !DISABLE_SSE,
+  sseIdleTimeoutMs = SSE_IDLE_TIMEOUT_MS,
+}: PipelineStatusProps) {
   const [status, setStatus] = useState<PipelineStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -179,6 +192,8 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [sseActive, setSseActive] = useState(useSSE);
   const sseCleanupRef = useRef<(() => void) | null>(null);
+  const sseLastEventRef = useRef<number>(0);
+  const sseIdleTimerRef = useRef<number | null>(null);
 
   const toggleStep = useCallback((stepName: string) => {
     setExpandedSteps((prev) => {
@@ -257,13 +272,29 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
   useEffect(() => {
     if (!sseActive) return;
 
+    sseLastEventRef.current = Date.now();
+    if (sseIdleTimerRef.current) {
+      window.clearInterval(sseIdleTimerRef.current);
+    }
+    sseIdleTimerRef.current = window.setInterval(() => {
+      if (Date.now() - sseLastEventRef.current > sseIdleTimeoutMs) {
+        setSseActive(false);
+        setPolling(true);
+      }
+    }, sseIdleTimeoutMs);
+
     const cleanup = api.streamPipelineStatus(runId, {
       onStatus: (data) => {
+        sseLastEventRef.current = Date.now();
         handleStatusUpdate(data);
       },
       onDone: () => {
+        sseLastEventRef.current = Date.now();
         setPolling(false);
         onComplete?.();
+      },
+      onPing: () => {
+        sseLastEventRef.current = Date.now();
       },
       onError: (err) => {
         // Fall back to polling on SSE error
@@ -278,8 +309,12 @@ export function PipelineStatus({ runId, onComplete, onStatusUpdate, pollInterval
     return () => {
       cleanup();
       sseCleanupRef.current = null;
+      if (sseIdleTimerRef.current) {
+        window.clearInterval(sseIdleTimerRef.current);
+        sseIdleTimerRef.current = null;
+      }
     };
-  }, [runId, sseActive, handleStatusUpdate, onComplete]);
+  }, [runId, sseActive, handleStatusUpdate, onComplete, sseIdleTimeoutMs]);
 
   // Polling fallback effect (only when SSE is disabled)
   useEffect(() => {

@@ -3,6 +3,8 @@
 outputs/
 .inf3-analytics/
 uploads/
+demo_data/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

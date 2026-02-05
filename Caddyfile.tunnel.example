@@ -1,9 +1,17 @@
+{
+  admin off
+}
+
 :8080 {
   basicauth {
     {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
   }
 
-  @api path /runs* /upload* /docs* /openapi.json /redoc*
-  reverse_proxy @api 127.0.0.1:8000
-  reverse_proxy 127.0.0.1:3000
+  handle_path /api* {
+    reverse_proxy 127.0.0.1:8000
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:3000
+  }
 }

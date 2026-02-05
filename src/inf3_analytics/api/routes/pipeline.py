@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
@@ -125,6 +126,8 @@ async def _status_event_generator(
     when the pipeline completes or fails.
     """
     last_status_json: str | None = None
+    last_emit = time.monotonic()
+    ping_interval = 10.0
 
     while True:
         # Check if client disconnected
@@ -158,10 +161,18 @@ async def _status_event_generator(
 
         current_status_json = json.dumps(status_dict, sort_keys=True)
 
+        now = time.monotonic()
+
         # Only emit if status changed
         if current_status_json != last_status_json:
             last_status_json = current_status_json
             yield {"event": "status", "data": json.dumps(status_dict)}
+            last_emit = now
+
+        # Send heartbeat to keep SSE alive through proxies
+        if now - last_emit >= ping_interval:
+            yield {"event": "ping", "data": "{}"}
+            last_emit = now
 
         # Check if pipeline is done
         is_done = run.status in (RunStatus.COMPLETED, RunStatus.FAILED) or all(

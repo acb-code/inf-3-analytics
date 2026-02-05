@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import type {
   EventFrameSet,
   FrameAnalysis,
@@ -42,7 +43,14 @@ export function EventFrameViewer({
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
-        setError(err?.message || "Failed to load frame analytics");
+        if (err instanceof ApiError && err.status === 404) {
+          // Frame analytics are optional; treat as "not available" rather than an error.
+          setFrameAnalyses([]);
+          setEventSummary(null);
+          setError(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load frame analytics");
         console.error("Failed to load frame analytics:", err);
       })
       .finally(() => {

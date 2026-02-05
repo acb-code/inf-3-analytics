@@ -24,6 +24,23 @@ import type {
 const API_BASE = process.env.NEXT_PUBLIC_INF3_API_BASE ?? "http://localhost:8000";
 const DEFAULT_TIMEOUT_MS = 10000;
 
+export class ApiError extends Error {
+  status: number;
+  statusText: string;
+  url: string;
+  detail?: string;
+
+  constructor(args: { status: number; statusText: string; url: string; detail?: string }) {
+    const detailSuffix = args.detail ? ` - ${args.detail}` : "";
+    super(`API error: ${args.status} ${args.statusText} (${args.url})${detailSuffix}`);
+    this.name = "ApiError";
+    this.status = args.status;
+    this.statusText = args.statusText;
+    this.url = args.url;
+    this.detail = args.detail;
+  }
+}
+
 export interface FetchOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -38,11 +55,29 @@ async function fetchJson<T>(path: string, options: FetchOptions = {}): Promise<T
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const signal = controller.signal;
 
-  const res = await fetch(`${API_BASE}${path}`, { signal });
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, { signal });
   clearTimeout(timeout);
   options.signal?.removeEventListener("abort", onAbort);
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    let detail: string | undefined;
+    try {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const body = (await res.json()) as unknown;
+        if (body && typeof body === "object" && "detail" in body) {
+          const raw = (body as { detail?: unknown }).detail;
+          if (typeof raw === "string") detail = raw;
+          else if (raw != null) detail = JSON.stringify(raw);
+        }
+      } else {
+        const text = await res.text();
+        if (text) detail = text.slice(0, 300);
+      }
+    } catch {
+      // Ignore parse errors; fall back to status/statusText only.
+    }
+    throw new ApiError({ status: res.status, statusText: res.statusText, url, detail });
   }
   return res.json();
 }
@@ -192,6 +227,7 @@ export const api = {
     callbacks: {
       onStatus?: (status: PipelineStatusResponse) => void;
       onDone?: (data: { run_status: string }) => void;
+      onPing?: () => void;
       onError?: (error: Error) => void;
     }
   ): (() => void) => {
@@ -215,6 +251,10 @@ export const api = {
         callbacks.onError?.(new Error("Failed to parse done event"));
       }
       eventSource.close();
+    });
+
+    eventSource.addEventListener("ping", () => {
+      callbacks.onPing?.();
     });
 
     eventSource.addEventListener("error", (event) => {
