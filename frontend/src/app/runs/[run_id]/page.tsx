@@ -311,7 +311,7 @@ export default function RunDetailPage({ params }: PageProps) {
       {/* Frame viewer modal */}
       {selectedFrameSet && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-          <div className="h-[90vh] w-[95vw] max-w-7xl overflow-hidden rounded-lg">
+          <div className="h-[95vh] w-[98vw] max-w-7xl overflow-hidden rounded-lg sm:h-[90vh] sm:w-[95vw]">
             <EventFrameViewer
               runId={run_id}
               eventFrameSet={selectedFrameSet}

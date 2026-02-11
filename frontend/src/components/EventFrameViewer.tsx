@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  type SyntheticEvent,
+  type WheelEvent,
+} from "react";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import type {
@@ -10,6 +16,12 @@ import type {
   Detection,
 } from "@/types/api";
 import { formatTime, getSeverityColor } from "@/lib/format";
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
+
+type ViewerMode = "fit" | "zoom";
 
 interface EventFrameViewerProps {
   runId: string;
@@ -27,6 +39,11 @@ export function EventFrameViewer({
   const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewerMode, setViewerMode] = useState<ViewerMode>("fit");
+  const [zoom, setZoom] = useState(1);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(
+    null
+  );
 
   // Use server-provided event directory when available
   const eventDir = eventFrameSet.event_dir || getEventDirName(eventFrameSet);
@@ -74,24 +91,99 @@ export function EventFrameViewer({
     );
   }, [eventFrameSet.frames.length]);
 
+  const clampZoom = useCallback((value: number) => {
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
+  }, []);
+
+  const setFitMode = useCallback(() => {
+    setViewerMode("fit");
+  }, []);
+
+  const setActualSize = useCallback(() => {
+    setViewerMode("zoom");
+    setZoom(1);
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    setViewerMode("zoom");
+    setZoom((current) =>
+      clampZoom((viewerMode === "fit" ? 1 : current) + ZOOM_STEP)
+    );
+  }, [clampZoom, viewerMode]);
+
+  const zoomOut = useCallback(() => {
+    setViewerMode("zoom");
+    setZoom((current) =>
+      clampZoom((viewerMode === "fit" ? 1 : current) - ZOOM_STEP)
+    );
+  }, [clampZoom, viewerMode]);
+
+  const handleImageLoad = useCallback((e: SyntheticEvent<HTMLImageElement>) => {
+    setNaturalSize({
+      width: e.currentTarget.naturalWidth,
+      height: e.currentTarget.naturalHeight,
+    });
+  }, []);
+
+  const handleImageWheel = useCallback(
+    (e: WheelEvent<HTMLDivElement>) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoomIn();
+      } else {
+        zoomOut();
+      }
+    },
+    [zoomIn, zoomOut]
+  );
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (e.key === "ArrowLeft") {
         goToPrev();
       } else if (e.key === "ArrowRight") {
         goToNext();
       } else if (e.key === "Escape") {
         onClose();
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        setActualSize();
+      } else if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setFitMode();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goToPrev, goToNext, onClose]);
+  }, [goToPrev, goToNext, onClose, setActualSize, setFitMode, zoomIn, zoomOut]);
 
   // Get the image URL for current frame
   const frameFilename = currentFrame.path.split("/").pop() || "";
   const imageUrl = api.getEventFrameUrl(runId, eventDir, frameFilename);
+
+  const frameWidth = currentFrame.width || naturalSize?.width || 0;
+  const frameHeight = currentFrame.height || naturalSize?.height || 0;
+  const zoomedWidth = frameWidth > 0 ? Math.round(frameWidth * zoom) : undefined;
+  const zoomedHeight = frameHeight > 0 ? Math.round(frameHeight * zoom) : undefined;
+  const zoomLabel = viewerMode === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`;
 
   return (
     <div className="flex h-full flex-col bg-gray-900">
@@ -117,16 +209,46 @@ export function EventFrameViewer({
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
         {/* Image section */}
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Image */}
-          <div className="relative flex-1 flex items-center justify-center bg-black p-2">
-            <img
-              src={imageUrl}
-              alt={`Frame ${currentIndex + 1}`}
-              className="max-h-full max-w-full object-contain"
-            />
+          <div className="relative flex-1 min-h-0 bg-black">
+            <div
+              onWheel={handleImageWheel}
+              className={`h-full w-full ${
+                viewerMode === "fit"
+                  ? "flex items-center justify-center overflow-hidden p-2"
+                  : "overflow-auto p-2"
+              }`}
+            >
+              <div
+                className={
+                  viewerMode === "zoom"
+                    ? "flex min-h-full min-w-full items-center justify-center"
+                    : ""
+                }
+              >
+                <img
+                  src={imageUrl}
+                  alt={`Frame ${currentIndex + 1}`}
+                  onLoad={handleImageLoad}
+                  className={
+                    viewerMode === "fit"
+                      ? "max-h-full max-w-full object-contain"
+                      : "block max-w-none"
+                  }
+                  style={
+                    viewerMode === "zoom" && zoomedWidth && zoomedHeight
+                      ? {
+                          width: `${zoomedWidth}px`,
+                          height: `${zoomedHeight}px`,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
 
             {/* Navigation arrows */}
             <button
@@ -152,7 +274,7 @@ export function EventFrameViewer({
           </div>
 
           {/* Thumbnail strip */}
-          <div className="flex gap-1 overflow-x-auto bg-gray-800 p-2">
+          <div className="flex gap-1 overflow-x-auto border-t border-gray-700 bg-gray-800 p-2">
             {eventFrameSet.frames.map((frame, idx) => {
               const thumbFilename = frame.path.split("/").pop() || "";
               const thumbUrl = api.getEventFrameUrl(runId, eventDir, thumbFilename);
@@ -169,7 +291,7 @@ export function EventFrameViewer({
                   <img
                     src={thumbUrl}
                     alt={`Frame ${idx + 1}`}
-                    className="h-12 w-12 object-cover"
+                    className="h-10 w-10 object-cover sm:h-12 sm:w-12"
                   />
                 </button>
               );
@@ -177,16 +299,61 @@ export function EventFrameViewer({
           </div>
 
           {/* Frame info bar */}
-          <div className="flex items-center justify-between bg-gray-800 px-4 py-2 text-sm text-gray-300">
-            <span>
-              Frame {currentIndex + 1} of {eventFrameSet.frames.length}
-            </span>
-            <span className="font-mono">{formatTime(currentFrame.timestamp_s)}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-300">
+            <div className="flex items-center gap-3">
+              <span>
+                Frame {currentIndex + 1} of {eventFrameSet.frames.length}
+              </span>
+              <span className="font-mono">{formatTime(currentFrame.timestamp_s)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={setFitMode}
+                className={`rounded px-2 py-1 text-xs font-medium ${
+                  viewerMode === "fit"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                }`}
+                title="Fit image to viewport (F)"
+              >
+                Fit
+              </button>
+              <button
+                onClick={setActualSize}
+                className={`rounded px-2 py-1 text-xs font-medium ${
+                  viewerMode === "zoom" && zoom === 1
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                }`}
+                title="Reset to 100% (0)"
+              >
+                100%
+              </button>
+              <button
+                onClick={zoomOut}
+                className="rounded bg-gray-700 px-2 py-1 text-xs font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
+                title="Zoom out (-)"
+                disabled={viewerMode === "zoom" && zoom <= MIN_ZOOM}
+              >
+                -
+              </button>
+              <span className="w-12 text-center text-xs tabular-nums text-gray-300">
+                {zoomLabel}
+              </span>
+              <button
+                onClick={zoomIn}
+                className="rounded bg-gray-700 px-2 py-1 text-xs font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
+                title="Zoom in (+)"
+                disabled={viewerMode === "zoom" && zoom >= MAX_ZOOM}
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Analysis panel */}
-        <div className="w-80 flex-shrink-0 overflow-y-auto border-l border-gray-700 bg-gray-800">
+        <div className="h-56 w-full flex-shrink-0 overflow-y-auto border-t border-gray-700 bg-gray-800 sm:h-64 xl:h-auto xl:w-80 xl:border-l xl:border-t-0">
           <div className="p-4">
             <h4 className="mb-3 text-sm font-medium text-white">VLM Analysis</h4>
 
