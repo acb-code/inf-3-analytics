@@ -5,6 +5,7 @@ outputs/
 uploads/
 demo_data/
 data/
+*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

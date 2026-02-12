@@ -21,8 +21,10 @@ from inf3_analytics.types.detection import (
     DetectionAttributes,
     DetectionType,
     EngineInfo,
+    EquipmentClass,
     FrameAnalyticsResult,
     FrameMeta,
+    HardhatColor,
     QAPair,
     Severity,
 )
@@ -135,11 +137,25 @@ def _parse_vlm_response(
                 if materials_data and isinstance(materials_data, list):
                     materials = tuple(str(m) for m in materials_data)
 
+                equipment_class = None
+                ec_str = attrs_data.get("equipment_class")
+                if ec_str:
+                    with contextlib.suppress(ValueError):
+                        equipment_class = EquipmentClass(ec_str)
+
+                hardhat_color = None
+                hc_str = attrs_data.get("hardhat_color")
+                if hc_str:
+                    with contextlib.suppress(ValueError):
+                        hardhat_color = HardhatColor(hc_str)
+
                 attrs = DetectionAttributes(
                     severity=severity,
                     materials=materials,
                     location_hint=attrs_data.get("location_hint"),
                     notes=attrs_data.get("notes"),
+                    equipment_class=equipment_class,
+                    hardhat_color=hardhat_color,
                 )
 
                 # Parse confidence

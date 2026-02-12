@@ -305,6 +305,96 @@ def get_openai_response_format() -> dict[str, Any]:
     }
 
 
+CONSTRUCTION_SITE_PROMPT_VERSION = "v1"
+
+# Equipment types for construction site prompts
+EQUIPMENT_TYPES_LIST = [
+    "excavator", "crane", "dump_truck", "concrete_mixer",
+    "bulldozer", "loader", "scaffolding", "other",
+]
+HARDHAT_COLORS_LIST = ["white", "yellow", "orange", "red", "blue", "green", "other"]
+
+
+def build_construction_site_prompt(
+    frame_meta: FrameMeta,
+    language: str = "en",
+) -> str:
+    """Build a VLM prompt for construction site verification.
+
+    Used when VLM verification is requested to classify uncertain detections
+    from YOLO-World (e.g., equipment type or hardhat color).
+
+    Args:
+        frame_meta: Metadata about the frame being analyzed
+        language: Language code for output
+
+    Returns:
+        Formatted prompt string
+    """
+    language_instruction = ""
+    if language == "fr":
+        language_instruction = "\n- All text output must be in French"
+
+    return f"""Analyze this construction site image taken at {frame_meta.timestamp_ts}.
+
+Count and classify all visible items:
+
+1. EQUIPMENT: For each piece of construction equipment, identify its type from: {EQUIPMENT_TYPES_LIST}
+2. PEOPLE: Count all visible people
+3. HARDHATS: For each visible hardhat, identify its color from: {HARDHAT_COLORS_LIST}
+
+OUTPUT REQUIREMENTS:
+Return a JSON object with this exact structure:
+{{
+  "detections": [
+    {{
+      "type": "construction_equipment|person|hardhat",
+      "label": "brief description",
+      "confidence": 0.0 to 1.0,
+      "bbox": {{"x": normalized_x, "y": normalized_y, "w": normalized_width, "h": normalized_height}} or null,
+      "attributes": {{
+        "equipment_class": "one of {EQUIPMENT_TYPES_LIST}" or null,
+        "hardhat_color": "one of {HARDHAT_COLORS_LIST}" or null,
+        "notes": "additional observations" or null
+      }}
+    }}
+  ],
+  "scene_summary": "1-2 sentences describing the construction site activity"
+}}
+
+IMPORTANT:
+- Output ONLY valid JSON, no markdown or extra text
+- Include empty detections array [] if nothing found
+- Bounding box coordinates should be normalized (0-1) if provided
+- Be conservative with confidence scores{language_instruction}"""
+
+
+def build_construction_site_system_prompt(language: str = "en") -> str:
+    """Build the system prompt for construction site VLM analysis.
+
+    Args:
+        language: Language code for output
+
+    Returns:
+        System prompt string
+    """
+    prompt = """You are an expert construction site analyst specializing in personnel counting, equipment identification, and safety compliance monitoring.
+
+Your task is to analyze construction site images and identify:
+- Construction equipment (excavators, cranes, dump trucks, concrete mixers, bulldozers, loaders, scaffolding)
+- Personnel (people visible on site)
+- Hardhats and their colors (for safety compliance tracking)
+
+Be precise and objective. Report what you observe without speculation.
+Always output STRICTLY valid JSON matching the provided schema.
+Do NOT include markdown formatting, code fences, or explanatory text."""
+
+    if language == "fr":
+        prompt += "\n\nIMPORTANT: All text output must be in French (scene summaries, detection labels, notes)."
+
+    return prompt
+
+
 def build_repair_prompt(original_response: str, error_message: str) -> str:
     """Build a prompt to repair malformed JSON output.
 

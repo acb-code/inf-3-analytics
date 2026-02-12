@@ -10,6 +10,8 @@ from inf3_analytics.frame_analytics.base import (
 _openai_engine: type[BaseFrameAnalyticsEngine] | None = None
 _gemini_engine: type[BaseFrameAnalyticsEngine] | None = None
 _baseline_engine: type[BaseFrameAnalyticsEngine] | None = None
+_yolo_world_engine: type[BaseFrameAnalyticsEngine] | None = None
+_vlm_site_engine: type[BaseFrameAnalyticsEngine] | None = None
 
 
 def _get_openai_engine() -> type[BaseFrameAnalyticsEngine]:
@@ -42,11 +44,35 @@ def _get_baseline_engine() -> type[BaseFrameAnalyticsEngine]:
     return _baseline_engine
 
 
+def _get_yolo_world_engine() -> type[BaseFrameAnalyticsEngine]:
+    """Lazily import YOLO-World engine."""
+    global _yolo_world_engine
+    if _yolo_world_engine is None:
+        from inf3_analytics.frame_analytics.yolo_world import YOLOWorldEngine
+
+        _yolo_world_engine = YOLOWorldEngine
+    return _yolo_world_engine
+
+
+def _get_vlm_site_engine() -> type[BaseFrameAnalyticsEngine]:
+    """Lazily import VLM site engine."""
+    global _vlm_site_engine
+    if _vlm_site_engine is None:
+        from inf3_analytics.frame_analytics.vlm_site import SiteVLMEngine
+
+        _vlm_site_engine = SiteVLMEngine
+    return _vlm_site_engine
+
+
 _ENGINE_REGISTRY: dict[str, type[BaseFrameAnalyticsEngine] | str] = {
     "openai": "lazy:openai",
     "gemini": "lazy:gemini",
     "baseline_quality": "lazy:baseline",
     "baseline": "baseline_quality",  # Alias
+    "yolo_world": "lazy:yolo_world",
+    "yolo": "yolo_world",  # Alias
+    "vlm_site": "lazy:vlm_site",
+    "site_vlm": "vlm_site",  # Alias
 }
 
 
@@ -78,6 +104,10 @@ def get_engine(name: str) -> type[BaseFrameAnalyticsEngine]:
                 return _get_gemini_engine()
             elif engine_type == "baseline":
                 return _get_baseline_engine()
+            elif engine_type == "yolo_world":
+                return _get_yolo_world_engine()
+            elif engine_type == "vlm_site":
+                return _get_vlm_site_engine()
             else:
                 raise ValueError(f"Unknown lazy engine: {engine_type}")
         else:
@@ -92,7 +122,7 @@ def list_engines() -> list[str]:
     Returns:
         List of registered engine names (excluding internal aliases)
     """
-    return [k for k in _ENGINE_REGISTRY if k != "baseline"]
+    return [k for k in _ENGINE_REGISTRY if k not in ("baseline", "yolo", "site_vlm")]
 
 
 __all__ = [

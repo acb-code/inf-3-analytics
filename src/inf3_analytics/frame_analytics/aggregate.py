@@ -1,15 +1,19 @@
 """Aggregation logic for event-level analytics summaries."""
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from inf3_analytics.types.detection import (
     AggregatedConfidence,
     DetectionType,
     EngineInfo,
+    EquipmentClass,
     EventAnalyticsSummary,
     Finding,
     FrameAnalyticsResult,
+    HardhatColor,
     RepresentativeFrame,
     Severity,
     TimeRange,
@@ -171,4 +175,229 @@ def select_representative_frame(results: list[FrameAnalyticsResult]) -> Represen
         frame_idx=best.frame_idx,
         image_path=best.image_path,
         timestamp_s=best.timestamp_s,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Construction site counting aggregation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class FrameCount:
+    """Per-frame counts of equipment and personnel.
+
+    Attributes:
+        frame_idx: Frame index in the sequence
+        timestamp_s: Timestamp in seconds
+        timestamp_ts: Formatted timestamp string
+        equipment_counts: Counts by EquipmentClass
+        person_count: Total people detected
+        hardhat_counts: Counts by HardhatColor
+    """
+
+    frame_idx: int
+    timestamp_s: float
+    timestamp_ts: str
+    equipment_counts: dict[str, int]  # EquipmentClass.value -> count
+    person_count: int
+    hardhat_counts: dict[str, int]  # HardhatColor.value -> count
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "frame_idx": self.frame_idx,
+            "timestamp_s": self.timestamp_s,
+            "timestamp_ts": self.timestamp_ts,
+            "equipment_counts": self.equipment_counts,
+            "person_count": self.person_count,
+            "hardhat_counts": self.hardhat_counts,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FrameCount":
+        """Create FrameCount from dictionary."""
+        return cls(
+            frame_idx=int(data["frame_idx"]),
+            timestamp_s=float(data["timestamp_s"]),
+            timestamp_ts=str(data["timestamp_ts"]),
+            equipment_counts=dict(data.get("equipment_counts", {})),
+            person_count=int(data.get("person_count", 0)),
+            hardhat_counts=dict(data.get("hardhat_counts", {})),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SiteCountSummary:
+    """Summary statistics across all frames.
+
+    Attributes:
+        peak_equipment: Peak count per equipment type across all frames
+        peak_persons: Peak person count in any single frame
+        peak_hardhats: Peak count per hardhat color across all frames
+        avg_persons: Average person count across frames
+        total_frames: Number of frames analyzed
+    """
+
+    peak_equipment: dict[str, int]
+    peak_persons: int
+    peak_hardhats: dict[str, int]
+    avg_persons: float
+    total_frames: int
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "peak_equipment": self.peak_equipment,
+            "peak_persons": self.peak_persons,
+            "peak_hardhats": self.peak_hardhats,
+            "avg_persons": round(self.avg_persons, 2),
+            "total_frames": self.total_frames,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SiteCountSummary":
+        """Create SiteCountSummary from dictionary."""
+        return cls(
+            peak_equipment=dict(data.get("peak_equipment", {})),
+            peak_persons=int(data.get("peak_persons", 0)),
+            peak_hardhats=dict(data.get("peak_hardhats", {})),
+            avg_persons=float(data.get("avg_persons", 0.0)),
+            total_frames=int(data.get("total_frames", 0)),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SiteCountTimeSeries:
+    """Time series of per-frame counts with summary statistics.
+
+    Attributes:
+        engine: Engine info for traceability
+        frames: Per-frame counts ordered by timestamp
+        summary: Aggregate statistics
+    """
+
+    engine: EngineInfo
+    frames: tuple[FrameCount, ...]
+    summary: SiteCountSummary
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "engine": self.engine.to_dict(),
+            "frames": [f.to_dict() for f in self.frames],
+            "summary": self.summary.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SiteCountTimeSeries":
+        """Create SiteCountTimeSeries from dictionary."""
+        return cls(
+            engine=EngineInfo.from_dict(data["engine"]),
+            frames=tuple(FrameCount.from_dict(f) for f in data.get("frames", [])),
+            summary=SiteCountSummary.from_dict(data.get("summary", {})),
+        )
+
+
+def _count_frame(result: FrameAnalyticsResult) -> FrameCount:
+    """Extract counts from a single frame's detections.
+
+    Args:
+        result: Frame analytics result with detections
+
+    Returns:
+        FrameCount for this frame
+    """
+    equipment_counts: dict[str, int] = defaultdict(int)
+    person_count = 0
+    hardhat_counts: dict[str, int] = defaultdict(int)
+
+    for det in result.detections:
+        if det.detection_type == DetectionType.CONSTRUCTION_EQUIPMENT:
+            eq_class = (
+                det.attributes.equipment_class.value
+                if det.attributes.equipment_class
+                else EquipmentClass.OTHER.value
+            )
+            equipment_counts[eq_class] += 1
+
+        elif det.detection_type == DetectionType.PERSON:
+            person_count += 1
+
+        elif det.detection_type == DetectionType.HARDHAT:
+            hc = (
+                det.attributes.hardhat_color.value
+                if det.attributes.hardhat_color
+                else HardhatColor.OTHER.value
+            )
+            hardhat_counts[hc] += 1
+
+    return FrameCount(
+        frame_idx=result.frame_idx,
+        timestamp_s=result.timestamp_s,
+        timestamp_ts=result.timestamp_ts,
+        equipment_counts=dict(equipment_counts),
+        person_count=person_count,
+        hardhat_counts=dict(hardhat_counts),
+    )
+
+
+def aggregate_site_counts(
+    results: list[FrameAnalyticsResult],
+    engine_info: EngineInfo,
+) -> SiteCountTimeSeries:
+    """Aggregate per-frame detections into a site count time series.
+
+    Args:
+        results: List of frame analytics results (should be sorted by timestamp)
+        engine_info: Engine information for traceability
+
+    Returns:
+        SiteCountTimeSeries with per-frame counts and summary
+    """
+    valid = [r for r in results if r.error is None]
+    frame_counts = [_count_frame(r) for r in valid]
+
+    # Sort by timestamp
+    frame_counts.sort(key=lambda fc: fc.timestamp_s)
+
+    if not frame_counts:
+        return SiteCountTimeSeries(
+            engine=engine_info,
+            frames=(),
+            summary=SiteCountSummary(
+                peak_equipment={},
+                peak_persons=0,
+                peak_hardhats={},
+                avg_persons=0.0,
+                total_frames=0,
+            ),
+        )
+
+    # Compute peaks
+    peak_equipment: dict[str, int] = defaultdict(int)
+    peak_hardhats: dict[str, int] = defaultdict(int)
+    peak_persons = 0
+    total_persons = 0
+
+    for fc in frame_counts:
+        for eq, count in fc.equipment_counts.items():
+            peak_equipment[eq] = max(peak_equipment[eq], count)
+        for hc, count in fc.hardhat_counts.items():
+            peak_hardhats[hc] = max(peak_hardhats[hc], count)
+        peak_persons = max(peak_persons, fc.person_count)
+        total_persons += fc.person_count
+
+    avg_persons = total_persons / len(frame_counts) if frame_counts else 0.0
+
+    return SiteCountTimeSeries(
+        engine=engine_info,
+        frames=tuple(frame_counts),
+        summary=SiteCountSummary(
+            peak_equipment=dict(peak_equipment),
+            peak_persons=peak_persons,
+            peak_hardhats=dict(peak_hardhats),
+            avg_persons=avg_persons,
+            total_frames=len(frame_counts),
+        ),
     )

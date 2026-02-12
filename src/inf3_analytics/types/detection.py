@@ -17,6 +17,10 @@ class DetectionType(Enum):
     SAFETY_RISK = "safety_risk"
     EQUIPMENT_ISSUE = "equipment_issue"
     VEGETATION = "vegetation"
+    CONSTRUCTION_EQUIPMENT = "construction_equipment"
+    VEHICLE = "vehicle"
+    PERSON = "person"
+    HARDHAT = "hardhat"
     OTHER = "other"
 
 
@@ -26,6 +30,31 @@ class Severity(Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class EquipmentClass(Enum):
+    """Construction equipment categories."""
+
+    EXCAVATOR = "excavator"
+    CRANE = "crane"
+    DUMP_TRUCK = "dump_truck"
+    CONCRETE_MIXER = "concrete_mixer"
+    BULLDOZER = "bulldozer"
+    LOADER = "loader"
+    SCAFFOLDING = "scaffolding"
+    OTHER = "other"
+
+
+class HardhatColor(Enum):
+    """Hardhat color categories for personnel identification."""
+
+    WHITE = "white"
+    YELLOW = "yellow"
+    ORANGE = "orange"
+    RED = "red"
+    BLUE = "blue"
+    GREEN = "green"
+    OTHER = "other"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,15 +89,22 @@ class DetectionAttributes:
     materials: tuple[str, ...] | None
     location_hint: str | None
     notes: str | None
+    equipment_class: EquipmentClass | None = None
+    hardhat_color: HardhatColor | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        d: dict[str, Any] = {
             "severity": self.severity.value if self.severity else None,
             "materials": list(self.materials) if self.materials else None,
             "location_hint": self.location_hint,
             "notes": self.notes,
         }
+        if self.equipment_class is not None:
+            d["equipment_class"] = self.equipment_class.value
+        if self.hardhat_color is not None:
+            d["hardhat_color"] = self.hardhat_color.value
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DetectionAttributes":
@@ -79,11 +115,19 @@ class DetectionAttributes:
         materials_data = data.get("materials")
         materials = tuple(str(m) for m in materials_data) if materials_data else None
 
+        eq_data = data.get("equipment_class")
+        equipment_class = EquipmentClass(eq_data) if eq_data else None
+
+        hc_data = data.get("hardhat_color")
+        hardhat_color = HardhatColor(hc_data) if hc_data else None
+
         return cls(
             severity=severity,
             materials=materials,
             location_hint=data.get("location_hint"),
             notes=data.get("notes"),
+            equipment_class=equipment_class,
+            hardhat_color=hardhat_color,
         )
 
 
