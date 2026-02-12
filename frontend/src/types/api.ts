@@ -83,6 +83,7 @@ export interface RunMetadata {
   video_basename: string;
   status: RunStatus;
   created_at: string;
+  language?: string;
 }
 
 // Response from GET /runs
@@ -249,6 +250,7 @@ export interface UploadResponse {
   video_path: string;
   run_root: string;
   message: string;
+  language?: string;
 }
 
 // Request for POST /runs/{run_id}/pipeline/start
@@ -257,6 +259,7 @@ export interface TriggerPipelineRequest {
   transcription_engine?: string;
   event_engine?: string;
   frame_analytics_engine?: string;
+  language?: string;
 }
 
 export interface DeleteRunResponse {

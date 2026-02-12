@@ -293,8 +293,8 @@ class OpenAIVLMEngine(BaseFrameAnalyticsEngine):
             raise FileNotFoundError(f"Image not found: {image_path}")
 
         engine_info = self.get_engine_info()
-        system_prompt = build_system_prompt()
-        user_prompt = build_analysis_prompt(frame_meta, event)
+        system_prompt = build_system_prompt(language=self.config.language)
+        user_prompt = build_analysis_prompt(frame_meta, event, language=self.config.language)
 
         # Encode image
         image_b64 = _encode_image_base64(image_path)

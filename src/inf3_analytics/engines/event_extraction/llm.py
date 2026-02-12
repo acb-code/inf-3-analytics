@@ -270,12 +270,14 @@ def _dedupe_events(events: list[Event]) -> list[Event]:
 def _build_extraction_prompt(
     segments: list[Segment],
     rule_events: tuple[Event, ...] | None = None,
+    language: str = "en",
 ) -> str:
     """Build prompt for event extraction.
 
     Args:
         segments: Segments to analyze
         rule_events: Optional rule-based events for correlation
+        language: Language code for output
 
     Returns:
         Formatted prompt string
@@ -294,6 +296,10 @@ def _build_extraction_prompt(
             for e in rule_events
         )
         rule_events_text += "\n\nFor each event you extract, identify which rule-based events (if any) describe the same finding."
+
+    language_instruction = ""
+    if language == "fr":
+        language_instruction = "\n\nIMPORTANT: All output text (titles, summaries, keywords, suggested actions) must be in French."
 
     return f"""You are an infrastructure inspection analyst. Analyze this transcript and extract significant events.
 
@@ -317,7 +323,7 @@ For each event found, return a JSON object with:
 
 Return ONLY a valid JSON array of event objects. No markdown, no explanation.
 Focus on significant findings: structural issues, safety concerns, maintenance needs, and measurements.
-Avoid extracting trivial location references or routine observations unless they're significant."""
+Avoid extracting trivial location references or routine observations unless they're significant.{language_instruction}"""
 
 
 def _parse_llm_response(
@@ -562,7 +568,14 @@ class OpenAIEventEngine(BaseEventExtractionEngine):
 
             # Build prompt with rule events for correlation
             batch_rule_events = _filter_rule_events_for_batch(batch, rule_events)
-            prompt = _build_extraction_prompt(batch, batch_rule_events)
+            prompt = _build_extraction_prompt(batch, batch_rule_events, language=self.config.language)
+
+            system_content = (
+                "You are an expert infrastructure inspection analyst. "
+                "Extract significant events from transcripts and return valid JSON."
+            )
+            if self.config.language == "fr":
+                system_content += " All output text must be in French."
 
             last_error: Exception | None = None
             for attempt in range(self.config.max_retries + 1):
@@ -572,8 +585,7 @@ class OpenAIEventEngine(BaseEventExtractionEngine):
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "You are an expert infrastructure inspection analyst. "
-                                "Extract significant events from transcripts and return valid JSON.",
+                                "content": system_content,
                             },
                             {"role": "user", "content": prompt},
                         ],
@@ -721,7 +733,7 @@ class GeminiEventEngine(BaseEventExtractionEngine):
 
             # Build prompt with rule events for correlation
             batch_rule_events = _filter_rule_events_for_batch(batch, rule_events)
-            prompt = _build_extraction_prompt(batch, batch_rule_events)
+            prompt = _build_extraction_prompt(batch, batch_rule_events, language=self.config.language)
 
             last_error: Exception | None = None
             for attempt in range(self.config.max_retries + 1):

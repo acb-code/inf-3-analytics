@@ -36,6 +36,9 @@ class AnalyticsConfig:
     # Model override
     model_name: str | None = None
 
+    # Language
+    language: str = "en"
+
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary for traceability."""
         return {
@@ -49,6 +52,7 @@ class AnalyticsConfig:
             "max_tokens": self.max_tokens,
             "fallback_to_baseline": self.fallback_to_baseline,
             "model_name": self.model_name,
+            "language": self.language,
         }
 
 

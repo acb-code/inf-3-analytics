@@ -286,6 +286,7 @@ def run_transcription(
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
+    language: str = "en",
 ) -> tuple[bool, str]:
     """Run the transcription step.
 
@@ -296,6 +297,7 @@ def run_transcription(
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
         registry: Optional registry for PID tracking
+        language: Language code (e.g. "en", "fr")
 
     Returns:
         Tuple of (success, message)
@@ -310,6 +312,8 @@ def run_transcription(
         engine,
         "--format",
         "json,txt,srt",
+        "--language",
+        language,
     ]
     cmd = _build_uv_command("inf3_analytics.cli.transcribe", args, extras)
     return _run_subprocess(
@@ -324,6 +328,7 @@ def run_event_extraction(
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
+    language: str = "en",
 ) -> tuple[bool, str]:
     """Run the event extraction step.
 
@@ -334,6 +339,7 @@ def run_event_extraction(
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
         registry: Optional registry for PID tracking
+        language: Language code (e.g. "en", "fr")
 
     Returns:
         Tuple of (success, message)
@@ -353,6 +359,8 @@ def run_event_extraction(
         engine,
         "--format",
         "json,md",
+        "--language",
+        language,
     ]
     cmd = _build_uv_command("inf3_analytics.cli.extract_events", args, extras)
     return _run_subprocess(
@@ -408,6 +416,7 @@ def run_frame_analytics(
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
+    language: str = "en",
 ) -> tuple[bool, str]:
     """Run the frame analytics step.
 
@@ -418,6 +427,7 @@ def run_frame_analytics(
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
         registry: Optional registry for PID tracking
+        language: Language code (e.g. "en", "fr")
 
     Returns:
         Tuple of (success, message)
@@ -437,6 +447,8 @@ def run_frame_analytics(
         str(analytics_dir),
         "--engine",
         engine,
+        "--language",
+        language,
     ]
     if events_path.exists():
         args.extend(["--events", str(events_path)])
@@ -571,6 +583,10 @@ def execute_pipeline(
     video_path_obj = Path(video_path)
     run_root_obj = Path(run_root)
 
+    # Get language from run metadata, fall back to request, then "en"
+    run_meta = registry.get_run(run_id)
+    language = (run_meta.language if run_meta else None) or request.language or "en"
+
     # Determine which steps to run
     steps_to_run = request.steps or list(PipelineStep)
 
@@ -593,11 +609,13 @@ def execute_pipeline(
         # Execute the step
         if step == PipelineStep.TRANSCRIBE:
             success, message = run_transcription(
-                video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry
+                video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry,
+                language=language,
             )
         elif step == PipelineStep.EXTRACT_EVENTS:
             success, message = run_event_extraction(
-                run_root_obj, video_basename, request.event_engine, on_output, run_id, registry
+                run_root_obj, video_basename, request.event_engine, on_output, run_id, registry,
+                language=language,
             )
         elif step == PipelineStep.EXTRACT_FRAMES:
             success, message = run_frame_extraction(
@@ -605,7 +623,8 @@ def execute_pipeline(
             )
         elif step == PipelineStep.FRAME_ANALYTICS:
             success, message = run_frame_analytics(
-                run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry
+                run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry,
+                language=language,
             )
         else:
             success, message = False, f"Unknown step: {step}"
@@ -665,6 +684,10 @@ def execute_single_step(
     video_path_obj = Path(video_path)
     run_root_obj = Path(run_root)
 
+    # Get language from run metadata, fall back to request, then "en"
+    run_meta = registry.get_run(run_id)
+    language = (run_meta.language if run_meta else None) or request.language or "en"
+
     # Mark step as running
     registry.update_step_status(run_id, step, StepStatus.RUNNING)
     registry.update_status(run_id, RunStatus.RUNNING)
@@ -675,11 +698,13 @@ def execute_single_step(
     # Execute the step
     if step == PipelineStep.TRANSCRIBE:
         success, message = run_transcription(
-            video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry
+            video_path_obj, run_root_obj, request.transcription_engine, on_output, run_id, registry,
+            language=language,
         )
     elif step == PipelineStep.EXTRACT_EVENTS:
         success, message = run_event_extraction(
-            run_root_obj, video_basename, request.event_engine, on_output, run_id, registry
+            run_root_obj, video_basename, request.event_engine, on_output, run_id, registry,
+            language=language,
         )
     elif step == PipelineStep.EXTRACT_FRAMES:
         success, message = run_frame_extraction(
@@ -687,7 +712,8 @@ def execute_single_step(
         )
     elif step == PipelineStep.FRAME_ANALYTICS:
         success, message = run_frame_analytics(
-            run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry
+            run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry,
+            language=language,
         )
     else:
         success, message = False, f"Unknown step: {step}"

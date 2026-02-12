@@ -103,6 +103,12 @@ class RunRegistry:
                 conn.execute("ALTER TABLE pipeline_steps ADD COLUMN pid INTEGER")
             except Exception:
                 pass
+            try:
+                conn.execute(
+                    "ALTER TABLE runs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'"
+                )
+            except Exception:
+                pass
 
     def _is_sqlite_file(self) -> bool:
         if not self._path.exists():
@@ -162,6 +168,7 @@ class RunRegistry:
         video_path: str,
         run_root: str,
         run_id: str | None = None,
+        language: str = "en",
     ) -> RunMetadata:
         """Create a new run entry.
 
@@ -169,6 +176,7 @@ class RunRegistry:
             video_path: Path to the video file
             run_root: Directory for pipeline outputs
             run_id: Optional custom run ID
+            language: Language code (e.g. "en", "fr")
 
         Returns:
             RunMetadata for the created run
@@ -182,29 +190,21 @@ class RunRegistry:
             video_basename = resolved_video_path.stem
             now = datetime.now(UTC)
 
-            run_data = {
-                "run_id": run_id,
-                "video_path": str(resolved_video_path),
-                "run_root": str(resolved_run_root),
-                "video_basename": video_basename,
-                "status": RunStatus.CREATED.value,
-                "created_at": now.isoformat(),
-            }
-
             with self._connect() as conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO runs
-                    (run_id, video_path, run_root, video_basename, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (run_id, video_path, run_root, video_basename, status, created_at, language)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        run_data["run_id"],
-                        run_data["video_path"],
-                        run_data["run_root"],
-                        run_data["video_basename"],
-                        run_data["status"],
-                        run_data["created_at"],
+                        run_id,
+                        str(resolved_video_path),
+                        str(resolved_run_root),
+                        video_basename,
+                        RunStatus.CREATED.value,
+                        now.isoformat(),
+                        language,
                     ),
                 )
 
@@ -215,6 +215,7 @@ class RunRegistry:
                 video_basename=video_basename,
                 status=RunStatus.CREATED,
                 created_at=now,
+                language=language,
             )
 
     def get_run(self, run_id: str) -> RunMetadata | None:
@@ -241,6 +242,7 @@ class RunRegistry:
                 video_basename=row["video_basename"],
                 status=RunStatus(row["status"]),
                 created_at=datetime.fromisoformat(row["created_at"]),
+                language=row["language"] if "language" in row.keys() else "en",
             )
 
     def list_runs(self) -> list[RunMetadata]:
@@ -262,6 +264,7 @@ class RunRegistry:
                     video_basename=row["video_basename"],
                     status=RunStatus(row["status"]),
                     created_at=datetime.fromisoformat(row["created_at"]),
+                    language=row["language"] if "language" in row.keys() else "en",
                 )
                 for row in rows
             ]

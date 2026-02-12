@@ -106,12 +106,16 @@ export const api = {
   // Upload
   uploadVideo: async (
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    language?: string
   ): Promise<UploadResponse> => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       formData.append("file", file);
+      if (language) {
+        formData.append("language", language);
+      }
 
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable && onProgress) {

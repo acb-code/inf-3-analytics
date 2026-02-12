@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 
 from inf3_analytics.api.config import Settings, get_settings
 from inf3_analytics.api.dependencies import get_registry
@@ -56,6 +56,7 @@ async def upload_video(
     file: UploadFile,
     settings: Annotated[Settings, Depends(get_settings)],
     registry: Annotated[RunRegistry, Depends(get_registry)],
+    language: str = Form("en"),
 ) -> UploadResponse:
     """Upload a video file and create a new run.
 
@@ -124,6 +125,7 @@ async def upload_video(
             video_path=str(video_path),
             run_root=str(run_root),
             run_id=run_id,
+            language=language,
         )
         # Initialize pipeline steps
         registry.init_pipeline_steps(run_id)
@@ -140,4 +142,5 @@ async def upload_video(
         video_path=str(video_path),
         run_root=str(run_root),
         message=f"Video uploaded successfully. Run ID: {run_id}",
+        language=language,
     )

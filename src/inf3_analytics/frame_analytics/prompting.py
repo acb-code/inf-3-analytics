@@ -11,7 +11,7 @@ from inf3_analytics.types.detection import DetectionType, FrameMeta, Severity
 from inf3_analytics.types.event import Event
 
 # Current prompt version - increment when changing prompt content
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 # Detection types as string values for prompt
 DETECTION_TYPES_LIST = [d.value for d in DetectionType]
@@ -27,14 +27,31 @@ INSPECTION_QUESTIONS = [
     "Is the structural element in good condition?",
 ]
 
+INSPECTION_QUESTIONS_FR = [
+    "Y a-t-il des signes de fissuration ?",
+    "La corrosion ou la rouille est-elle visible ?",
+    "Y a-t-il des signes de dommages causés par l'eau ou de fuites ?",
+    "Y a-t-il de l'écaillage ou de la détérioration du matériau ?",
+    "Y a-t-il des risques pour la sécurité visibles ?",
+    "L'élément structurel est-il en bon état ?",
+]
 
-def build_system_prompt() -> str:
+INSPECTION_QUESTIONS_BY_LANG: dict[str, list[str]] = {
+    "en": INSPECTION_QUESTIONS,
+    "fr": INSPECTION_QUESTIONS_FR,
+}
+
+
+def build_system_prompt(language: str = "en") -> str:
     """Build the system prompt for VLM analysis.
+
+    Args:
+        language: Language code for output
 
     Returns:
         System prompt string
     """
-    return """You are an expert infrastructure inspection analyst with extensive experience in identifying structural anomalies, defects, and safety issues in infrastructure images.
+    prompt = """You are an expert infrastructure inspection analyst with extensive experience in identifying structural anomalies, defects, and safety issues in infrastructure images.
 
 Your task is to analyze inspection images and identify:
 - Structural issues (cracks, deformation, damage)
@@ -48,16 +65,23 @@ Be precise and objective. Report what you observe without speculation.
 Always output STRICTLY valid JSON matching the provided schema.
 Do NOT include markdown formatting, code fences, or explanatory text."""
 
+    if language == "fr":
+        prompt += "\n\nIMPORTANT: All text output must be in French (scene summaries, QA answers, detection labels, notes)."
+
+    return prompt
+
 
 def build_analysis_prompt(
     frame_meta: FrameMeta,
     event: Event | None = None,
+    language: str = "en",
 ) -> str:
     """Build the user prompt for frame analysis.
 
     Args:
         frame_meta: Metadata about the frame being analyzed
         event: Optional event context from transcript
+        language: Language code for output
 
     Returns:
         Formatted prompt string
@@ -80,7 +104,12 @@ def build_analysis_prompt(
 
     context_block = "\n".join(context_lines)
 
-    questions_block = "\n".join(f"- {q}" for q in INSPECTION_QUESTIONS)
+    questions = INSPECTION_QUESTIONS_BY_LANG.get(language, INSPECTION_QUESTIONS)
+    questions_block = "\n".join(f"- {q}" for q in questions)
+
+    language_instruction = ""
+    if language == "fr":
+        language_instruction = "\n- All text output (scene_summary, qa answers, detection labels, notes) must be in French"
 
     return f"""Analyze this infrastructure inspection image.
 
@@ -118,7 +147,7 @@ IMPORTANT:
 - Include empty detections array [] if no issues found
 - Bounding box coordinates should be normalized (0-1) if provided, or null if uncertain
 - Be conservative with confidence scores
-- Answer all checklist questions in the qa array"""
+- Answer all checklist questions in the qa array{language_instruction}"""
 
 
 def get_json_schema() -> dict[str, Any]:

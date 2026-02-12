@@ -120,6 +120,13 @@ Examples:
         help="Output formats, comma-separated: json,md,ndjson (default: json,md)",
     )
 
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="en",
+        help="Language code for output: en (English), fr (French) (default: en)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -187,6 +194,7 @@ def main(args: list[str] | None = None) -> int:
         merge_gap_s=parsed.merge_gap,
         llm_model=llm_model,
         max_segments_per_batch=parsed.max_segments_per_batch,
+        language=parsed.language,
     )
 
     all_events: list[Event] = []

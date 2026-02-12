@@ -273,8 +273,8 @@ class GeminiVLMEngine(BaseFrameAnalyticsEngine):
             raise FileNotFoundError(f"Image not found: {image_path}")
 
         engine_info = self.get_engine_info()
-        system_prompt = build_system_prompt()
-        user_prompt = build_analysis_prompt(frame_meta, event)
+        system_prompt = build_system_prompt(language=self.config.language)
+        user_prompt = build_analysis_prompt(frame_meta, event, language=self.config.language)
 
         # Full prompt combining system and user prompts
         full_prompt = f"{system_prompt}\n\n{user_prompt}"

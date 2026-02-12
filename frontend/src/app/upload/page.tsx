@@ -28,6 +28,7 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDecomposePrompt, setShowDecomposePrompt] = useState(false);
   const [dismissedPrompt, setDismissedPrompt] = useState(false);
+  const [language, setLanguage] = useState<"en" | "fr">("en");
 
   // Check video duration when file changes
   useEffect(() => {
@@ -127,14 +128,14 @@ export default function UploadPage() {
     setError(null);
 
     try {
-      const result = await api.uploadVideo(file, setProgress);
+      const result = await api.uploadVideo(file, setProgress, language);
       // Redirect to run detail page
       router.push(`/runs/${result.run_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setUploading(false);
     }
-  }, [file, router]);
+  }, [file, router, language]);
 
   const handleRemove = useCallback(() => {
     setFile(null);
@@ -321,6 +322,44 @@ export default function UploadPage() {
           </div>
         </div>
       )}
+
+      {/* Language selector */}
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Language
+        </label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setLanguage("en")}
+            disabled={uploading}
+            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              language === "en"
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage("fr")}
+            disabled={uploading}
+            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              language === "fr"
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            Français
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          {language === "fr"
+            ? "Transcription, événements et analyses seront en français"
+            : "Transcription, events, and analytics will be in English"}
+        </p>
+      </div>
 
       {/* Error message */}
       {error && (

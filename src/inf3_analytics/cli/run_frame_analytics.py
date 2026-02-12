@@ -177,6 +177,13 @@ Environment Variables:
         help="Number of parallel VLM API calls (default: 8, use 1 for sequential)",
     )
 
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="en",
+        help="Language code for output: en (English), fr (French) (default: en)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -231,6 +238,7 @@ def main(args: list[str] | None = None) -> int:
         fallback_to_baseline=parsed.fallback_to_baseline,
         model_name=parsed.model,
         parallel_workers=parsed.parallel_workers,
+        language=parsed.language,
     )
 
     # Count frames to process

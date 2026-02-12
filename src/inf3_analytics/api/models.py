@@ -67,6 +67,7 @@ class RunMetadata(BaseModel):
     video_basename: str
     status: RunStatus
     created_at: datetime
+    language: str = "en"
 
 
 class ArtifactInfo(BaseModel):
@@ -177,6 +178,7 @@ class UploadResponse(BaseModel):
     video_path: str
     run_root: str
     message: str
+    language: str = "en"
 
 
 class TriggerPipelineRequest(BaseModel):
@@ -193,6 +195,9 @@ class TriggerPipelineRequest(BaseModel):
     )
     frame_analytics_engine: str = Field(
         default="gemini", description="Frame analytics engine: gemini, openai, baseline_quality"
+    )
+    language: str = Field(
+        default="en", description="Language code: en (English), fr (French)"
     )
 
 

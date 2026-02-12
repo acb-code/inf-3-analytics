@@ -128,6 +128,108 @@ DEFAULT_KEYWORDS: dict[EventType, list[str]] = {
     ],
 }
 
+# French keywords for each event type
+DEFAULT_KEYWORDS_FR: dict[EventType, list[str]] = {
+    EventType.OBSERVATION: [
+        "observé",
+        "observation",
+        "observer",
+        "noté",
+        "noter",
+        "constaté",
+    ],
+    EventType.STRUCTURAL_ANOMALY: [
+        "fissure",
+        "fissuré",
+        "fissuration",
+        "fracture",
+        "corrosion",
+        "corrodé",
+        "rouille",
+        "rouillé",
+        "déformation",
+        "déformé",
+        "plié",
+        "flambé",
+        "dommage",
+        "endommagé",
+        "détérioration",
+        "écaillage",
+        "éclatement",
+        "érosion",
+    ],
+    EventType.SAFETY_RISK: [
+        "danger",
+        "dangereux",
+        "risque",
+        "avertissement",
+        "prudence",
+        "précaution",
+        "insécuritaire",
+        "inquiétant",
+        "préoccupant",
+    ],
+    EventType.MAINTENANCE_NOTE: [
+        "réparation",
+        "réparer",
+        "remplacer",
+        "entretien",
+        "maintenance",
+        "inspecter",
+        "inspection requise",
+        "nécessite attention",
+        "recommander",
+    ],
+    EventType.MEASUREMENT: [
+        "millimètre",
+        "centimètre",
+        "mètre",
+        "pouce",
+        "pied",
+        "pieds",
+        "degrés",
+        "pourcent",
+        "épaisseur",
+        "profondeur",
+        "largeur",
+        "longueur",
+    ],
+    EventType.LOCATION_REFERENCE: [
+        "section",
+        "zone",
+        "emplacement",
+        "position",
+        "nord",
+        "sud",
+        "est",
+        "ouest",
+        "haut",
+        "bas",
+        "gauche",
+        "droite",
+        "centre",
+        "travée",
+        "pilier",
+        "colonne",
+        "poutre",
+        "joint",
+    ],
+    EventType.UNCERTAINTY: [
+        "peut-être",
+        "possiblement",
+        "pas certain",
+        "incertain",
+        "pourrait être",
+        "semble être",
+        "on dirait",
+    ],
+}
+
+DEFAULT_KEYWORDS_BY_LANG: dict[str, dict[EventType, list[str]]] = {
+    "en": DEFAULT_KEYWORDS,
+    "fr": DEFAULT_KEYWORDS_FR,
+}
+
 # High-signal keywords that boost confidence
 HIGH_SIGNAL_KEYWORDS: set[str] = {
     "crack",
@@ -138,6 +240,22 @@ HIGH_SIGNAL_KEYWORDS: set[str] = {
     "unsafe",
     "fracture",
     "deterioration",
+}
+
+HIGH_SIGNAL_KEYWORDS_FR: set[str] = {
+    "fissure",
+    "corrosion",
+    "danger",
+    "risque",
+    "dommage",
+    "insécuritaire",
+    "fracture",
+    "détérioration",
+}
+
+HIGH_SIGNAL_KEYWORDS_BY_LANG: dict[str, set[str]] = {
+    "en": HIGH_SIGNAL_KEYWORDS,
+    "fr": HIGH_SIGNAL_KEYWORDS | HIGH_SIGNAL_KEYWORDS_FR,
 }
 
 # Keywords that suggest severity levels
@@ -170,7 +288,49 @@ SEVERITY_KEYWORDS: dict[EventSeverity, set[str]] = {
     },
 }
 
+SEVERITY_KEYWORDS_FR: dict[EventSeverity, set[str]] = {
+    EventSeverity.HIGH: {
+        "sévère",
+        "critique",
+        "majeur",
+        "important",
+        "grave",
+        "immédiat",
+        "urgent",
+        "dangereux",
+        "risqué",
+        "insécuritaire",
+    },
+    EventSeverity.MEDIUM: {
+        "modéré",
+        "notable",
+        "visible",
+        "apparent",
+        "préoccupant",
+    },
+    EventSeverity.LOW: {
+        "mineur",
+        "léger",
+        "petit",
+        "minimal",
+        "superficiel",
+    },
+}
+
+SEVERITY_KEYWORDS_BY_LANG: dict[str, dict[EventSeverity, set[str]]] = {
+    "en": SEVERITY_KEYWORDS,
+    "fr": {
+        sev: SEVERITY_KEYWORDS[sev] | SEVERITY_KEYWORDS_FR[sev]
+        for sev in EventSeverity
+    },
+}
+
 NEGATION_TERMS = ("no", "not", "without", "none", "never", "neither")
+NEGATION_TERMS_FR = ("non", "pas", "sans", "aucun", "aucune", "jamais", "ni")
+NEGATION_TERMS_BY_LANG: dict[str, tuple[str, ...]] = {
+    "en": NEGATION_TERMS,
+    "fr": NEGATION_TERMS + NEGATION_TERMS_FR,
+}
 MEASUREMENT_NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 
 
@@ -223,8 +383,17 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
         if self._loaded:
             return
 
-        # Load default keywords
-        self._keywords = {k: list(v) for k, v in DEFAULT_KEYWORDS.items()}
+        # Select keyword set based on language
+        lang = self.config.language
+        base_keywords = DEFAULT_KEYWORDS_BY_LANG.get(lang, DEFAULT_KEYWORDS)
+        self._keywords = {k: list(v) for k, v in base_keywords.items()}
+
+        # For French, also include English keywords for broader coverage
+        if lang == "fr":
+            for event_type, en_keywords in DEFAULT_KEYWORDS.items():
+                self._keywords.setdefault(event_type, [])
+                self._keywords[event_type].extend(en_keywords)
+
         self._keyword_patterns = {
             event_type: [(kw, _keyword_pattern(kw)) for kw in keywords]
             for event_type, keywords in self._keywords.items()
@@ -327,15 +496,17 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
         prefix = text[max(0, start - 80) : start]
         suffix = text[end : min(len(text), end + 80)]
 
+        neg_terms = NEGATION_TERMS_BY_LANG.get(self.config.language, NEGATION_TERMS)
+
         negation_prefix = re.search(
-            r"\b(" + "|".join(NEGATION_TERMS) + r")\b(?:\W+\w+){0,3}\W*$",
+            r"\b(" + "|".join(re.escape(t) for t in neg_terms) + r")\b(?:\W+\w+){0,3}\W*$",
             prefix,
         )
         if negation_prefix:
             return True
 
         negation_suffix = re.search(
-            r"^\W*(?:\w+\W+){0,3}\b(" + "|".join(NEGATION_TERMS) + r")\b",
+            r"^\W*(?:\w+\W+){0,3}\b(" + "|".join(re.escape(t) for t in neg_terms) + r")\b",
             suffix,
         )
         return bool(negation_suffix)
@@ -354,7 +525,8 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
         base = min(0.3 + 0.15 * len(keywords), 0.8)
 
         # Boost for specific high-signal keywords
-        if any(kw in HIGH_SIGNAL_KEYWORDS for kw in keywords):
+        high_signal = HIGH_SIGNAL_KEYWORDS_BY_LANG.get(self.config.language, HIGH_SIGNAL_KEYWORDS)
+        if any(kw in high_signal for kw in keywords):
             base = min(base + 0.15, 0.95)
 
         return base
@@ -604,8 +776,9 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
             Severity level or None if undetermined
         """
         # Check for severity keywords in order of priority
+        sev_keywords = SEVERITY_KEYWORDS_BY_LANG.get(self.config.language, SEVERITY_KEYWORDS)
         for severity in [EventSeverity.HIGH, EventSeverity.MEDIUM, EventSeverity.LOW]:
-            if any(kw in text for kw in SEVERITY_KEYWORDS[severity]):
+            if any(kw in text for kw in sev_keywords[severity]):
                 return severity
 
         return None
@@ -620,7 +793,7 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
         Returns:
             Short descriptive title
         """
-        type_names = {
+        type_names_en = {
             EventType.OBSERVATION: "Observation",
             EventType.STRUCTURAL_ANOMALY: "Structural issue",
             EventType.MAINTENANCE_NOTE: "Maintenance note",
@@ -630,14 +803,28 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
             EventType.UNCERTAINTY: "Uncertainty noted",
             EventType.OTHER: "Note",
         }
+        type_names_fr = {
+            EventType.OBSERVATION: "Observation",
+            EventType.STRUCTURAL_ANOMALY: "Anomalie structurelle",
+            EventType.MAINTENANCE_NOTE: "Note de maintenance",
+            EventType.SAFETY_RISK: "Risque de sécurité",
+            EventType.MEASUREMENT: "Mesure",
+            EventType.LOCATION_REFERENCE: "Référence de localisation",
+            EventType.UNCERTAINTY: "Incertitude notée",
+            EventType.OTHER: "Note",
+        }
 
+        is_fr = self.config.language == "fr"
+        type_names = type_names_fr if is_fr else type_names_en
         base_title = type_names.get(event_type, "Note")
 
         # Add primary keyword if it provides specificity
+        high_signal = HIGH_SIGNAL_KEYWORDS_BY_LANG.get(self.config.language, HIGH_SIGNAL_KEYWORDS)
         if keywords:
             primary_kw = keywords[0]
-            if primary_kw in HIGH_SIGNAL_KEYWORDS:
-                return f"{primary_kw.capitalize()} detected"
+            if primary_kw in high_signal:
+                suffix = "détecté(e)" if is_fr else "detected"
+                return f"{primary_kw.capitalize()} {suffix}"
 
         return base_title
 
@@ -655,7 +842,10 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
             1-3 sentence summary
         """
         keyword_str = ", ".join(keywords[:3])
-        return f"Detected {event_type.value.replace('_', ' ')} keywords ({keyword_str}): \"{excerpt}\""
+        type_label = event_type.value.replace("_", " ")
+        if self.config.language == "fr":
+            return f"Mots-clés de type {type_label} détectés ({keyword_str}) : \"{excerpt}\""
+        return f"Detected {type_label} keywords ({keyword_str}): \"{excerpt}\""
 
     def _suggest_actions(
         self, event_type: EventType, severity: EventSeverity | None
@@ -670,25 +860,26 @@ class RuleBasedEventEngine(BaseEventExtractionEngine):
             Tuple of suggested actions or None
         """
         actions: list[str] = []
+        is_fr = self.config.language == "fr"
 
         if event_type == EventType.STRUCTURAL_ANOMALY:
-            actions.append("Schedule detailed inspection")
+            actions.append("Planifier une inspection détaillée" if is_fr else "Schedule detailed inspection")
             if severity == EventSeverity.HIGH:
-                actions.append("Prioritize for immediate assessment")
+                actions.append("Prioriser pour évaluation immédiate" if is_fr else "Prioritize for immediate assessment")
 
         elif event_type == EventType.SAFETY_RISK:
-            actions.append("Review safety protocols")
+            actions.append("Réviser les protocoles de sécurité" if is_fr else "Review safety protocols")
             if severity == EventSeverity.HIGH:
-                actions.append("Consider immediate remediation")
+                actions.append("Considérer une remédiation immédiate" if is_fr else "Consider immediate remediation")
 
         elif event_type == EventType.MAINTENANCE_NOTE:
-            actions.append("Add to maintenance schedule")
+            actions.append("Ajouter au calendrier de maintenance" if is_fr else "Add to maintenance schedule")
 
         elif event_type == EventType.MEASUREMENT:
-            actions.append("Verify measurement accuracy")
-            actions.append("Compare with baseline data")
+            actions.append("Vérifier la précision de la mesure" if is_fr else "Verify measurement accuracy")
+            actions.append("Comparer avec les données de référence" if is_fr else "Compare with baseline data")
 
         elif event_type == EventType.UNCERTAINTY:
-            actions.append("Schedule follow-up inspection for clarification")
+            actions.append("Planifier une inspection de suivi pour clarification" if is_fr else "Schedule follow-up inspection for clarification")
 
         return tuple(actions) if actions else None

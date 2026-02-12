@@ -21,6 +21,9 @@ class EventExtractionConfig:
     # Rule engine settings
     keywords_file: Path | None = None
 
+    # Language
+    language: str = "en"
+
     # LLM engine settings
     llm_engine: str | None = None
     llm_model: str = "gpt-5-mini"
