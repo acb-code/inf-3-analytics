@@ -65,7 +65,7 @@ export default function RunDetailPage({ params }: PageProps) {
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
   const [showSiteAnalytics, setShowSiteAnalytics] = useState(false);
-  const [siteEngine, setSiteEngine] = useState("yolo");
+  const [siteEngine, setSiteEngine] = useState("gemini");
   const [siteLanguage, setSiteLanguage] = useState("en");
   const videoRef = useRef<HTMLVideoElement>(null);
 

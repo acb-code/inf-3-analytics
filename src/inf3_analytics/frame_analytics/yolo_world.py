@@ -28,7 +28,7 @@ DEFAULT_MODEL = "yolov8x-worldv2"
 # Default text prompts for YOLO-World zero-shot detection
 DEFAULT_CLASSES: tuple[str, ...] = (
     "excavator",
-    "crane",
+    "construction crane",
     "dump truck",
     "concrete mixer",
     "bulldozer",
@@ -46,7 +46,7 @@ DEFAULT_CLASSES: tuple[str, ...] = (
 # Map YOLO-World class labels to DetectionType + EquipmentClass/HardhatColor
 _EQUIPMENT_LABELS: dict[str, EquipmentClass] = {
     "excavator": EquipmentClass.EXCAVATOR,
-    "crane": EquipmentClass.CRANE,
+    "construction crane": EquipmentClass.CRANE,
     "dump truck": EquipmentClass.DUMP_TRUCK,
     "concrete mixer": EquipmentClass.CONCRETE_MIXER,
     "bulldozer": EquipmentClass.BULLDOZER,

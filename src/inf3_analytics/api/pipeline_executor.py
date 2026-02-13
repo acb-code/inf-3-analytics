@@ -502,6 +502,8 @@ def run_site_analytics(
         engine,
         "--fps",
         str(fps),
+        "--language",
+        language,
     ]
     cmd = _build_uv_command("inf3_analytics.cli.run_site_analytics", args, extras)
     return _run_subprocess(

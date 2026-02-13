@@ -217,7 +217,7 @@ class TriggerPipelineRequest(BaseModel):
         default="en", description="Language code: en (English), fr (French)"
     )
     site_analytics_engine: str = Field(
-        default="yolo", description="Site analytics engine: yolo, gemini, openai"
+        default="gemini", description="Site analytics engine: yolo, gemini, openai"
     )
     site_analytics_fps: float = Field(
         default=0.5, description="Frames per second for site analytics extraction"

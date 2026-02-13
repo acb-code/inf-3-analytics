@@ -93,9 +93,9 @@ Examples:
     parser.add_argument(
         "--engine",
         type=str,
-        default="yolo",
+        default="gemini",
         choices=["yolo", "gemini", "openai"],
-        help="Detection engine: yolo (local YOLO-World), gemini (Gemini VLM), openai (OpenAI VLM) (default: yolo)",
+        help="Detection engine: yolo (local YOLO-World), gemini (Gemini VLM), openai (OpenAI VLM) (default: gemini)",
     )
 
     parser.add_argument(
@@ -152,6 +152,13 @@ Examples:
         type=int,
         default=1,
         help="Number of parallel workers for frame processing (default: 1)",
+    )
+
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="en",
+        help="Language code for output: en (English), fr (French) (default: en)",
     )
 
     parser.add_argument(
@@ -348,6 +355,7 @@ def main(args: list[str] | None = None) -> int:
         model_name=parsed.model,
         parallel_workers=parsed.parallel_workers,
         sleep_ms_between_requests=parsed.sleep_ms,
+        language=parsed.language,
     )
 
     engine: BaseFrameAnalyticsEngine

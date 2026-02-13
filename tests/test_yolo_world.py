@@ -42,7 +42,7 @@ class TestClassifyDetection:
         assert attrs.equipment_class == EquipmentClass.EXCAVATOR
 
     def test_crane(self) -> None:
-        dtype, attrs = _classify_detection("crane")
+        dtype, attrs = _classify_detection("construction crane")
         assert dtype == DetectionType.CONSTRUCTION_EQUIPMENT
         assert attrs.equipment_class == EquipmentClass.CRANE
 
@@ -108,7 +108,7 @@ class TestClassifyDetection:
         assert attrs.equipment_class == EquipmentClass.EXCAVATOR
 
     def test_whitespace_handling(self) -> None:
-        dtype, attrs = _classify_detection("  crane  ")
+        dtype, attrs = _classify_detection("  construction crane  ")
         assert dtype == DetectionType.CONSTRUCTION_EQUIPMENT
         assert attrs.equipment_class == EquipmentClass.CRANE
 
@@ -119,7 +119,7 @@ class TestYOLOWorldEngine:
     def test_default_classes(self) -> None:
         """Default classes include equipment, person, and hardhat variants."""
         assert "excavator" in DEFAULT_CLASSES
-        assert "crane" in DEFAULT_CLASSES
+        assert "construction crane" in DEFAULT_CLASSES
         assert "person" in DEFAULT_CLASSES
         assert "yellow hardhat" in DEFAULT_CLASSES
         assert "white hardhat" in DEFAULT_CLASSES
