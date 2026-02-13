@@ -23,6 +23,7 @@ class PipelineStep(str, Enum):
     EXTRACT_EVENTS = "extract_events"
     EXTRACT_FRAMES = "extract_frames"
     FRAME_ANALYTICS = "frame_analytics"
+    SITE_ANALYTICS = "site_analytics"
 
 
 class StepStatus(str, Enum):
@@ -42,6 +43,7 @@ class ArtifactType(str, Enum):
     EVENTS = "events"
     EVENT_FRAMES_MANIFEST = "event_frames_manifest"
     FRAME_ANALYTICS_MANIFEST = "frame_analytics_manifest"
+    SITE_ANALYTICS = "site_analytics"
 
 
 # Request models
@@ -143,6 +145,21 @@ class FrameAnalyticsEventResponse(BaseModel):
     event_summary: dict[str, Any] | None
 
 
+class SiteAnalyticsCountsResponse(BaseModel):
+    """Site analytics aggregated counts response."""
+
+    engine: dict[str, Any]
+    frames: list[dict[str, Any]]
+    summary: dict[str, Any]
+
+
+class SiteAnalyticsFramesResponse(BaseModel):
+    """Per-frame detection results for site analytics."""
+
+    frames: list[dict[str, Any]]
+    total_frames: int
+
+
 # Pipeline models
 
 
@@ -198,6 +215,12 @@ class TriggerPipelineRequest(BaseModel):
     )
     language: str = Field(
         default="en", description="Language code: en (English), fr (French)"
+    )
+    site_analytics_engine: str = Field(
+        default="yolo", description="Site analytics engine: yolo, gemini, openai"
+    )
+    site_analytics_fps: float = Field(
+        default=0.5, description="Frames per second for site analytics extraction"
     )
 
 

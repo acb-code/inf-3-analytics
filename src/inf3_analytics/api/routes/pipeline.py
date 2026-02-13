@@ -69,6 +69,15 @@ def _calculate_progress(steps: list[PipelineStepInfo]) -> int:
     return int(progress)
 
 
+STEP_PREREQUISITES: dict[PipelineStep, list[PipelineStep]] = {
+    PipelineStep.TRANSCRIBE: [],
+    PipelineStep.EXTRACT_EVENTS: [PipelineStep.TRANSCRIBE],
+    PipelineStep.EXTRACT_FRAMES: [PipelineStep.EXTRACT_EVENTS],
+    PipelineStep.FRAME_ANALYTICS: [PipelineStep.EXTRACT_FRAMES],
+    PipelineStep.SITE_ANALYTICS: [],  # Independent — only needs video
+}
+
+
 def _check_step_prerequisites(step: PipelineStep, steps: list[PipelineStepInfo]) -> str | None:
     """Check if prerequisites for a step are met.
 
@@ -79,17 +88,13 @@ def _check_step_prerequisites(step: PipelineStep, steps: list[PipelineStepInfo])
     Returns:
         Error message if prerequisites not met, None otherwise
     """
-    step_order = list(PipelineStep)
-    step_index = step_order.index(step)
-
-    # Build a map of step -> status
+    prereqs = STEP_PREREQUISITES.get(step, [])
     status_map = {s.step: s.status for s in steps}
 
-    # Check all previous steps
-    for prev_step in step_order[:step_index]:
-        prev_status = status_map.get(prev_step)
-        if prev_status not in (StepStatus.COMPLETED, StepStatus.SKIPPED):
-            return f"Step '{step.value}' requires '{prev_step.value}' to be completed first"
+    for prereq in prereqs:
+        prereq_status = status_map.get(prereq)
+        if prereq_status not in (StepStatus.COMPLETED, StepStatus.SKIPPED):
+            return f"Step '{step.value}' requires '{prereq.value}' to be completed first"
 
     return None
 

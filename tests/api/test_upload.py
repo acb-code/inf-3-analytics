@@ -81,7 +81,7 @@ def test_upload_initializes_pipeline_steps(
 
     # Verify pipeline steps are initialized
     steps = test_registry.get_pipeline_steps(run_id)
-    assert len(steps) == 4  # 4 pipeline steps
+    assert len(steps) == 5  # 5 pipeline steps
 
     # All should be pending
     for step in steps:

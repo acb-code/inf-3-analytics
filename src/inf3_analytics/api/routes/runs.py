@@ -80,6 +80,20 @@ def _detect_artifacts(run: RunMetadata, settings: Settings) -> list[ArtifactInfo
         )
     )
 
+    # Site analytics: {run_root}/site_analytics/site_counts.json
+    site_counts_path = run_root / "site_analytics" / "site_counts.json"
+    artifacts.append(
+        ArtifactInfo(
+            type=ArtifactType.SITE_ANALYTICS,
+            available=site_counts_path.exists(),
+            url=(
+                f"/runs/{run.run_id}/artifacts/site-analytics/counts"
+                if site_counts_path.exists()
+                else None
+            ),
+        )
+    )
+
     return artifacts
 
 

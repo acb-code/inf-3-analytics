@@ -29,6 +29,8 @@ ENGINE_EXTRAS: dict[str, list[str]] = {
     "faster-whisper": [],
     "rules": [],
     "baseline_quality": ["cv"],
+    "yolo": ["yolo"],
+    "yolo_world": ["yolo"],
 }
 
 # Track running processes for cancellation
@@ -459,6 +461,54 @@ def run_frame_analytics(
     )
 
 
+def _get_site_analytics_dir(run_root: Path) -> Path:
+    """Get the path to the site analytics directory."""
+    return run_root / "site_analytics"
+
+
+def run_site_analytics(
+    video_path: Path,
+    run_root: Path,
+    engine: str = "yolo",
+    fps: float = 0.5,
+    on_output: Callable[[str], None] | None = None,
+    run_id: str | None = None,
+    registry: "RunRegistry | None" = None,
+    language: str = "en",
+) -> tuple[bool, str]:
+    """Run the site analytics step.
+
+    Args:
+        video_path: Path to video file
+        run_root: Output directory for the run
+        engine: Site analytics engine to use (yolo, gemini, openai)
+        fps: Frames per second to extract
+        on_output: Optional callback for streaming output
+        run_id: Optional run ID for process tracking
+        registry: Optional registry for PID tracking
+        language: Language code (e.g. "en", "fr")
+
+    Returns:
+        Tuple of (success, message)
+    """
+    site_dir = _get_site_analytics_dir(run_root)
+    extras = ENGINE_EXTRAS.get(engine, [])
+    args = [
+        "--video",
+        str(video_path),
+        "--out",
+        str(site_dir),
+        "--engine",
+        engine,
+        "--fps",
+        str(fps),
+    ]
+    cmd = _build_uv_command("inf3_analytics.cli.run_site_analytics", args, extras)
+    return _run_subprocess(
+        cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.SITE_ANALYTICS
+    )
+
+
 def _make_output_callback(
     registry: RunRegistry,
     run_id: str,
@@ -587,8 +637,14 @@ def execute_pipeline(
     run_meta = registry.get_run(run_id)
     language = (run_meta.language if run_meta else None) or request.language or "en"
 
-    # Determine which steps to run
-    steps_to_run = request.steps or list(PipelineStep)
+    # Determine which steps to run (default: event-based pipeline, excluding site_analytics)
+    DEFAULT_PIPELINE_STEPS = [
+        PipelineStep.TRANSCRIBE,
+        PipelineStep.EXTRACT_EVENTS,
+        PipelineStep.EXTRACT_FRAMES,
+        PipelineStep.FRAME_ANALYTICS,
+    ]
+    steps_to_run = request.steps or DEFAULT_PIPELINE_STEPS
 
     # Update run status to running
     registry.update_status(run_id, RunStatus.RUNNING)
@@ -624,6 +680,12 @@ def execute_pipeline(
         elif step == PipelineStep.FRAME_ANALYTICS:
             success, message = run_frame_analytics(
                 run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry,
+                language=language,
+            )
+        elif step == PipelineStep.SITE_ANALYTICS:
+            success, message = run_site_analytics(
+                video_path_obj, run_root_obj, request.site_analytics_engine,
+                request.site_analytics_fps, on_output, run_id, registry,
                 language=language,
             )
         else:
@@ -713,6 +775,12 @@ def execute_single_step(
     elif step == PipelineStep.FRAME_ANALYTICS:
         success, message = run_frame_analytics(
             run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry,
+            language=language,
+        )
+    elif step == PipelineStep.SITE_ANALYTICS:
+        success, message = run_site_analytics(
+            video_path_obj, run_root_obj, request.site_analytics_engine,
+            request.site_analytics_fps, on_output, run_id, registry,
             language=language,
         )
     else:

@@ -3,10 +3,11 @@
 import { useEffect, useState, useRef, use, useCallback } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { RunDetailResponse, Event, EventFrameSet, PipelineStatusResponse, PipelineStep, CreateEventRequest } from "@/types/api";
+import type { RunDetailResponse, Event, EventFrameSet, PipelineStatusResponse, PipelineStep, CreateEventRequest, TriggerPipelineRequest } from "@/types/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { EventList } from "@/components/EventList";
 import { EventFrameViewer } from "@/components/EventFrameViewer";
+import { SiteAnalyticsViewer } from "@/components/SiteAnalyticsViewer";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { PipelineStatus } from "@/components/PipelineStatus";
 import { AddEventModal } from "@/components/AddEventModal";
@@ -21,13 +22,30 @@ const STEP_LABELS: Record<PipelineStep, string> = {
   extract_events: "Extract Events",
   extract_frames: "Extract Frames",
   frame_analytics: "Analyze Frames",
+  site_analytics: "Site Analytics",
 };
 
-const STEP_ORDER: PipelineStep[] = [
+// Event-based pipeline steps (run with "Run All Steps")
+const EVENT_STEP_ORDER: PipelineStep[] = [
   "transcribe",
   "extract_events",
   "extract_frames",
   "frame_analytics",
+];
+
+// Dependency map for step prerequisites
+const STEP_PREREQUISITES: Record<PipelineStep, PipelineStep[]> = {
+  transcribe: [],
+  extract_events: ["transcribe"],
+  extract_frames: ["extract_events"],
+  frame_analytics: ["extract_frames"],
+  site_analytics: [], // Independent — only needs video
+};
+
+const SITE_ENGINE_OPTIONS = [
+  { value: "yolo", label: "YOLO" },
+  { value: "gemini", label: "Gemini" },
+  { value: "openai", label: "OpenAI" },
 ];
 
 export default function RunDetailPage({ params }: PageProps) {
@@ -46,6 +64,9 @@ export default function RunDetailPage({ params }: PageProps) {
   const [selectedEventForComments, setSelectedEventForComments] = useState<Event | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
+  const [showSiteAnalytics, setShowSiteAnalytics] = useState(false);
+  const [siteEngine, setSiteEngine] = useState("yolo");
+  const [siteLanguage, setSiteLanguage] = useState("en");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -60,6 +81,7 @@ export default function RunDetailPage({ params }: PageProps) {
       setEvents(eventsData.events || []);
       setEventFrameSets(framesManifest.event_frame_sets || []);
       setPipelineStatus(pipelineData);
+      if (runData.run.language) setSiteLanguage(runData.run.language);
       setLoading(false);
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
@@ -104,14 +126,21 @@ export default function RunDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleRunStep = async (step: PipelineStep) => {
+  const handleRunStep = async (step: PipelineStep, request?: TriggerPipelineRequest) => {
     setActionError(null);
     try {
-      await api.runPipelineStep(run_id, step);
+      await api.runPipelineStep(run_id, step, request);
       setShowPipeline(true);
     } catch (err) {
       setActionError((err as Error).message);
     }
+  };
+
+  const handleRunSiteAnalytics = async () => {
+    await handleRunStep("site_analytics", {
+      site_analytics_engine: siteEngine,
+      language: siteLanguage,
+    });
   };
 
   const handlePipelineComplete = () => {
@@ -153,20 +182,24 @@ export default function RunDetailPage({ params }: PageProps) {
   };
 
   const isStepEnabled = (step: PipelineStep): boolean => {
-    if (!pipelineStatus) return step === "transcribe";
-    const stepIndex = STEP_ORDER.indexOf(step);
-    if (stepIndex === 0) return true;
+    const prereqs = STEP_PREREQUISITES[step] || [];
+    if (prereqs.length === 0) return true; // No prerequisites
+    if (!pipelineStatus) return false;
 
-    // Check if all previous steps are completed
-    for (let i = 0; i < stepIndex; i++) {
-      const prevStep = STEP_ORDER[i];
-      const prevStatus = pipelineStatus.steps.find((s) => s.step === prevStep);
-      if (!prevStatus || (prevStatus.status !== "completed" && prevStatus.status !== "skipped")) {
-        return false;
-      }
-    }
-    return true;
+    return prereqs.every((prereq) => {
+      const prereqStatus = pipelineStatus.steps.find((s) => s.step === prereq);
+      return prereqStatus && (prereqStatus.status === "completed" || prereqStatus.status === "skipped");
+    });
   };
+
+  const isSiteAnalyticsCompleted = pipelineStatus?.steps.find(
+    (s) => s.step === "site_analytics"
+  )?.status === "completed";
+
+  // Check if site analytics artifacts are available (works even when pipeline panel is closed)
+  const hasSiteAnalyticsArtifact = runDetail?.artifacts.some(
+    (a) => a.type === "site_analytics" && a.available
+  ) ?? false;
 
   const isAnyStepRunning = pipelineStatus?.steps.some((s) => s.status === "running") ?? false;
 
@@ -214,6 +247,14 @@ export default function RunDetailPage({ params }: PageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {(hasSiteAnalyticsArtifact || isSiteAnalyticsCompleted) && (
+              <button
+                onClick={() => setShowSiteAnalytics(true)}
+                className="rounded border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100"
+              >
+                View Site Analytics
+              </button>
+            )}
             <button
               onClick={() => setShowPipeline(!showPipeline)}
               className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -243,8 +284,8 @@ export default function RunDetailPage({ params }: PageProps) {
       {showPipeline && (
         <div className="border-b border-gray-200 bg-gray-50 p-4">
           <div className="mx-auto max-w-4xl">
-            <div className="mb-4 flex flex-wrap gap-2">
-              {STEP_ORDER.map((step) => (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {EVENT_STEP_ORDER.map((step) => (
                 <button
                   key={step}
                   onClick={() => handleRunStep(step)}
@@ -258,6 +299,59 @@ export default function RunDetailPage({ params }: PageProps) {
                   {STEP_LABELS[step]}
                 </button>
               ))}
+
+              {/* Divider */}
+              <div className="mx-1 h-6 w-px bg-gray-300" />
+
+              {/* Site Analytics button */}
+              <button
+                onClick={handleRunSiteAnalytics}
+                disabled={isAnyStepRunning}
+                className={`rounded px-3 py-1.5 text-sm ${
+                  isAnyStepRunning
+                    ? "cursor-not-allowed bg-gray-200 text-gray-500"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Site Analytics
+              </button>
+
+              {/* Engine selector */}
+              <select
+                value={siteEngine}
+                onChange={(e) => setSiteEngine(e.target.value)}
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+              >
+                {SITE_ENGINE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+
+              {/* Language toggle */}
+              <div className="inline-flex rounded border border-gray-300 text-sm">
+                <button
+                  onClick={() => setSiteLanguage("en")}
+                  className={`px-2 py-1 ${siteLanguage === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setSiteLanguage("fr")}
+                  className={`px-2 py-1 ${siteLanguage === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  FR
+                </button>
+              </div>
+
+              {/* View Site Analytics button (when completed) */}
+              {isSiteAnalyticsCompleted && (
+                <button
+                  onClick={() => setShowSiteAnalytics(true)}
+                  className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  View Site Analytics
+                </button>
+              )}
             </div>
             {actionError && (
               <div className="mb-4 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
@@ -338,6 +432,19 @@ export default function RunDetailPage({ params }: PageProps) {
           event={selectedEventForComments}
           onClose={() => setSelectedEventForComments(null)}
         />
+      )}
+
+      {/* Site analytics viewer modal */}
+      {showSiteAnalytics && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="h-[95vh] w-[98vw] max-w-7xl overflow-hidden rounded-lg sm:h-[90vh] sm:w-[95vw]">
+            <SiteAnalyticsViewer
+              runId={run_id}
+              language={siteLanguage}
+              onClose={() => setShowSiteAnalytics(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

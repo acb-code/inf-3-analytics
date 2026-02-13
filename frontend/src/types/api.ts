@@ -6,7 +6,8 @@ export type PipelineStep =
   | "transcribe"
   | "extract_events"
   | "extract_frames"
-  | "frame_analytics";
+  | "frame_analytics"
+  | "site_analytics";
 
 // Pipeline step status
 export type StepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
@@ -16,7 +17,8 @@ export type ArtifactType =
   | "transcript"
   | "events"
   | "event_frames_manifest"
-  | "frame_analytics_manifest";
+  | "frame_analytics_manifest"
+  | "site_analytics";
 
 // Event types matching backend
 export type EventType =
@@ -260,6 +262,8 @@ export interface TriggerPipelineRequest {
   event_engine?: string;
   frame_analytics_engine?: string;
   language?: string;
+  site_analytics_engine?: string;
+  site_analytics_fps?: number;
 }
 
 export interface DeleteRunResponse {
@@ -341,6 +345,63 @@ export interface DecompositionJobResponse {
   job_id: string;
   message: string;
   status_url: string;
+}
+
+// Site analytics types
+
+export interface SiteFrameDetection {
+  event_id: string;
+  frame_idx: number;
+  timestamp_s: number;
+  timestamp_ts: string;
+  image_path: string;
+  engine: {
+    name: string;
+    provider: string;
+    model: string;
+    prompt_version: string;
+    version: string;
+    config: Record<string, unknown>;
+  };
+  detections: Detection[];
+  scene_summary: string;
+  qa: QAPair[] | null;
+  error: string | null;
+}
+
+export interface SiteCountsSummary {
+  peak_equipment: Record<string, number>;
+  peak_persons: number;
+  peak_hardhats: Record<string, number>;
+  avg_persons: number;
+  total_frames: number;
+}
+
+export interface SiteFrameCount {
+  frame_idx: number;
+  timestamp_s: number;
+  timestamp_ts: string;
+  equipment_counts: Record<string, number>;
+  person_count: number;
+  hardhat_counts: Record<string, number>;
+}
+
+export interface SiteCountsTimeSeries {
+  engine: {
+    name: string;
+    provider: string;
+    model: string;
+    prompt_version: string;
+    version: string;
+    config: Record<string, unknown>;
+  };
+  frames: SiteFrameCount[];
+  summary: SiteCountsSummary;
+}
+
+export interface SiteAnalyticsFramesResponse {
+  frames: SiteFrameDetection[];
+  total_frames: number;
 }
 
 // Event management types

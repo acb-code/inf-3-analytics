@@ -18,6 +18,8 @@ import type {
   CreateCommentRequest,
   EventComment,
   Event,
+  SiteCountsTimeSeries,
+  SiteAnalyticsFramesResponse,
 } from "@/types/api";
 
 // Treat an explicitly-empty NEXT_PUBLIC_INF3_API_BASE as "same-origin" (root-relative paths).
@@ -275,6 +277,19 @@ export const api = {
       eventSource.close();
     };
   },
+
+  // Site analytics
+  getSiteAnalyticsCounts: (runId: string, options?: FetchOptions) =>
+    fetchJson<SiteCountsTimeSeries>(`/runs/${runId}/artifacts/site-analytics/counts`, options),
+
+  getSiteAnalyticsFrames: (runId: string, offset = 0, limit = 50, options?: FetchOptions) =>
+    fetchJson<SiteAnalyticsFramesResponse>(
+      `/runs/${runId}/artifacts/site-analytics/frames?offset=${offset}&limit=${limit}`,
+      options
+    ),
+
+  getSiteAnalyticsFrameUrl: (runId: string, frameFilename: string) =>
+    `${API_BASE}/runs/${runId}/artifacts/site-analytics/frames/${frameFilename}`,
 
   // Decomposition
   analyzeForDecomposition: async (

@@ -31,7 +31,7 @@ def test_get_pipeline_status(client: TestClient, uploaded_run: dict) -> None:
     data = response.json()
     assert data["run_id"] == run_id
     assert "steps" in data
-    assert len(data["steps"]) == 4
+    assert len(data["steps"]) == 5
     assert "progress_percent" in data
     assert data["progress_percent"] == 0  # All pending
 
@@ -137,19 +137,19 @@ def test_pipeline_progress_calculation(
     response = client.get(f"/runs/{run_id}/pipeline/status")
     assert response.json()["progress_percent"] == 0
 
-    # After 1 step completed (1/4 = 25%)
+    # After 1 step completed (1/5 = 20%)
     test_registry.update_step_status(
         run_id, PipelineStep.TRANSCRIBE, StepStatus.COMPLETED
     )
     response = client.get(f"/runs/{run_id}/pipeline/status")
-    assert response.json()["progress_percent"] == 25
+    assert response.json()["progress_percent"] == 20
 
-    # After 2 steps completed (2/4 = 50%)
+    # After 2 steps completed (2/5 = 40%)
     test_registry.update_step_status(
         run_id, PipelineStep.EXTRACT_EVENTS, StepStatus.COMPLETED
     )
     response = client.get(f"/runs/{run_id}/pipeline/status")
-    assert response.json()["progress_percent"] == 50
+    assert response.json()["progress_percent"] == 40
 
 
 def test_pipeline_status_shows_running_step(
@@ -169,8 +169,8 @@ def test_pipeline_status_shows_running_step(
     transcribe_step = next(s for s in data["steps"] if s["step"] == "transcribe")
     assert transcribe_step["status"] == "running"
     assert transcribe_step["started_at"] is not None
-    # Progress should be ~12% (0.5/4 * 100)
-    assert data["progress_percent"] == 12
+    # Progress should be 10% (0.5/5 * 100)
+    assert data["progress_percent"] == 10
 
 
 def test_pipeline_status_shows_error(
@@ -204,7 +204,7 @@ def test_legacy_run_gets_steps_initialized(
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["steps"]) == 4
+    assert len(data["steps"]) == 5
 
 
 def test_cancel_pipeline_not_running(client: TestClient, uploaded_run: dict) -> None:

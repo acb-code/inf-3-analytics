@@ -20,6 +20,7 @@ const STEP_LABELS: Record<string, string> = {
   extract_events: "Extract Events",
   extract_frames: "Extract Frames",
   frame_analytics: "Analyze Frames",
+  site_analytics: "Site Analytics",
 };
 
 function StatusIcon({ status }: { status: StepStatus }) {
@@ -340,7 +341,7 @@ export function PipelineStatus({
   if (!status) {
     return (
       <div className="animate-pulse space-y-3">
-        {[1, 2, 3, 4].map((i) => (
+        {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="h-5 w-5 rounded-full bg-gray-200" />
             <div className="h-4 flex-1 rounded bg-gray-200" />

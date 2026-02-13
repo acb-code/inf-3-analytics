@@ -134,20 +134,25 @@ def test_get_run_success(
     assert response.status_code == 200
     data = response.json()
     assert data["run"]["run_id"] == run_id
-    assert len(data["artifacts"]) == 4
+    assert len(data["artifacts"]) == 5
 
-    # Check all artifacts are available
+    # Check original artifacts are available
     artifact_types = {a["type"] for a in data["artifacts"]}
     assert artifact_types == {
         "transcript",
         "events",
         "event_frames_manifest",
         "frame_analytics_manifest",
+        "site_analytics",
     }
 
     for artifact in data["artifacts"]:
-        assert artifact["available"] is True
-        assert artifact["url"] is not None
+        if artifact["type"] == "site_analytics":
+            assert artifact["available"] is False  # Not created in fixture
+            assert artifact["url"] is None
+        else:
+            assert artifact["available"] is True
+            assert artifact["url"] is not None
 
 
 def test_get_run_not_found(client: TestClient) -> None:

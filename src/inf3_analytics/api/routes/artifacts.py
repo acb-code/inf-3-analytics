@@ -15,6 +15,8 @@ from inf3_analytics.api.models import (
     FrameAnalyticsEventResponse,
     FrameAnalyticsManifestResponse,
     RunMetadata,
+    SiteAnalyticsCountsResponse,
+    SiteAnalyticsFramesResponse,
     TranscriptResponse,
 )
 from inf3_analytics.io import read_events_json, read_json, read_manifest
@@ -231,3 +233,114 @@ def get_event_frame_analyses(
             result["event_summary"] = json.load(f)
 
     return result
+
+
+# --- Site Analytics Endpoints ---
+
+
+@router.get("/site-analytics/counts", response_model=SiteAnalyticsCountsResponse)
+def get_site_analytics_counts(
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Get aggregated site analytics counts."""
+    run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
+    counts_path = run_root / "site_analytics" / "site_counts.json"
+    validate_path_security(counts_path, settings)
+
+    if not counts_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Site analytics counts not found",
+        )
+
+    with open(counts_path) as f:
+        return json.load(f)
+
+
+@router.get("/site-analytics/frames", response_model=SiteAnalyticsFramesResponse)
+def get_site_analytics_frames(
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    offset: int = 0,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Get per-frame site analytics detections with pagination."""
+    run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
+    detections_path = run_root / "site_analytics" / "frame_detections.ndjson"
+    validate_path_security(detections_path, settings)
+
+    if not detections_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Site analytics frame detections not found",
+        )
+
+    all_frames: list[dict[str, Any]] = []
+    with open(detections_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                all_frames.append(json.loads(line))
+
+    total = len(all_frames)
+    page = all_frames[offset : offset + limit]
+    return {"frames": page, "total_frames": total}
+
+
+@router.get("/site-analytics/frames/{frame_filename}")
+def get_site_analytics_frame_image(
+    frame_filename: str,
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FileResponse:
+    """Serve an individual site analytics frame image."""
+    run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
+    frame_path = run_root / "site_analytics" / "frames" / frame_filename
+
+    # Security: ensure path is within expected directory
+    try:
+        frame_path = frame_path.resolve()
+        expected_root = (run_root / "site_analytics" / "frames").resolve()
+        if not str(frame_path).startswith(str(expected_root)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path",
+            )
+    except (ValueError, OSError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid path",
+        )
+
+    validate_path_security(frame_path, settings)
+    if not frame_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Frame image not found",
+        )
+
+    return FileResponse(frame_path, media_type="image/jpeg")
+
+
+@router.get("/site-analytics/report")
+def get_site_analytics_report(
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Get the site analytics markdown report."""
+    run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
+    report_path = run_root / "site_analytics" / "site_report.md"
+    validate_path_security(report_path, settings)
+
+    if not report_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Site analytics report not found",
+        )
+
+    return {"report": report_path.read_text(encoding="utf-8")}

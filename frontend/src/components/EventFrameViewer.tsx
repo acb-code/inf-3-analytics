@@ -13,9 +13,10 @@ import type {
   EventFrameSet,
   FrameAnalysis,
   EventSummary,
-  Detection,
 } from "@/types/api";
 import { formatTime, getSeverityColor } from "@/lib/format";
+import { BoundingBoxOverlay } from "./BoundingBoxOverlay";
+import { DetectionToggleList } from "./DetectionToggleList";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -44,6 +45,7 @@ export function EventFrameViewer({
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(
     null
   );
+  const [visibleDetections, setVisibleDetections] = useState<Set<number>>(new Set());
 
   // Use server-provided event directory when available
   const eventDir = eventFrameSet.event_dir || getEventDirName(eventFrameSet);
@@ -80,6 +82,32 @@ export function EventFrameViewer({
   const currentAnalysis = frameAnalyses.find(
     (a) => a.frame_idx === currentIndex
   );
+
+  // Update visible detections when analysis changes
+  useEffect(() => {
+    if (currentAnalysis) {
+      setVisibleDetections(new Set(currentAnalysis.detections.map((_, i) => i)));
+    } else {
+      setVisibleDetections(new Set());
+    }
+  }, [currentIndex, currentAnalysis?.frame_idx]);
+
+  const handleToggleDetection = useCallback((index: number) => {
+    setVisibleDetections((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const handleShowAllDetections = useCallback(() => {
+    if (currentAnalysis) {
+      setVisibleDetections(new Set(currentAnalysis.detections.map((_, i) => i)));
+    }
+  }, [currentAnalysis]);
+
+  const handleHideAllDetections = useCallback(() => setVisibleDetections(new Set()), []);
 
   const goToPrev = useCallback(() => {
     setCurrentIndex((i) => (i > 0 ? i - 1 : i));
@@ -226,27 +254,38 @@ export function EventFrameViewer({
                 className={
                   viewerMode === "zoom"
                     ? "flex min-h-full min-w-full items-center justify-center"
-                    : ""
+                    : "flex h-full w-full items-center justify-center"
                 }
               >
-                <img
-                  src={imageUrl}
-                  alt={`Frame ${currentIndex + 1}`}
-                  onLoad={handleImageLoad}
-                  className={
-                    viewerMode === "fit"
-                      ? "max-h-full max-w-full object-contain"
-                      : "block max-w-none"
-                  }
+                <div
+                  className="relative"
                   style={
-                    viewerMode === "zoom" && zoomedWidth && zoomedHeight
+                    viewerMode === "fit"
                       ? {
-                          width: `${zoomedWidth}px`,
-                          height: `${zoomedHeight}px`,
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          aspectRatio: frameWidth > 0 && frameHeight > 0
+                            ? `${frameWidth} / ${frameHeight}`
+                            : undefined,
                         }
-                      : undefined
+                      : zoomedWidth && zoomedHeight
+                        ? { width: `${zoomedWidth}px`, height: `${zoomedHeight}px` }
+                        : undefined
                   }
-                />
+                >
+                  <img
+                    src={imageUrl}
+                    alt={`Frame ${currentIndex + 1}`}
+                    onLoad={handleImageLoad}
+                    className="block h-full w-full"
+                  />
+                  {currentAnalysis && (
+                    <BoundingBoxOverlay
+                      detections={currentAnalysis.detections}
+                      visibleIndices={visibleDetections}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -379,18 +418,15 @@ export function EventFrameViewer({
                   </div>
                 )}
 
-                {/* Detections */}
+                {/* Detections with toggle */}
                 {currentAnalysis.detections.length > 0 && (
-                  <div>
-                    <h5 className="mb-2 text-xs font-medium uppercase text-gray-400">
-                      Detections ({currentAnalysis.detections.length})
-                    </h5>
-                    <div className="space-y-2">
-                      {currentAnalysis.detections.map((det, idx) => (
-                        <DetectionCard key={idx} detection={det} />
-                      ))}
-                    </div>
-                  </div>
+                  <DetectionToggleList
+                    detections={currentAnalysis.detections}
+                    visibleIndices={visibleDetections}
+                    onToggle={handleToggleDetection}
+                    onShowAll={handleShowAllDetections}
+                    onHideAll={handleHideAllDetections}
+                  />
                 )}
 
                 {/* QA pairs */}
@@ -453,36 +489,6 @@ export function EventFrameViewer({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function DetectionCard({ detection }: { detection: Detection }) {
-  return (
-    <div className="rounded bg-gray-700 p-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium capitalize text-gray-200">
-          {detection.label}
-        </span>
-        <span className="text-xs text-gray-400">
-          {Math.round(detection.confidence * 100)}%
-        </span>
-      </div>
-      <div className="mt-1 flex flex-wrap gap-1">
-        <span className="rounded bg-gray-600 px-1.5 py-0.5 text-xs text-gray-300">
-          {detection.type}
-        </span>
-        {detection.attributes.severity && (
-          <span
-            className={`rounded px-1.5 py-0.5 text-xs capitalize ${getSeverityColor(detection.attributes.severity as "low" | "medium" | "high")}`}
-          >
-            {detection.attributes.severity}
-          </span>
-        )}
-      </div>
-      {detection.attributes.notes && (
-        <p className="mt-1 text-xs text-gray-400">{detection.attributes.notes}</p>
-      )}
     </div>
   );
 }
