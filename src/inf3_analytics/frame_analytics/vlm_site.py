@@ -316,10 +316,12 @@ class SiteVLMEngine(BaseFrameAnalyticsEngine):
         last_error: Exception | None = None
         for attempt in range(self.config.max_retries + 1):
             try:
+                # gpt-5* models use max_completion_tokens; older models use max_tokens
+                tokens_key = "max_completion_tokens" if self._model_name.startswith("gpt-5") else "max_tokens"
                 request_args: dict[str, Any] = {
                     "model": self._model_name,
                     "messages": messages,
-                    "max_tokens": self.config.max_tokens,
+                    tokens_key: self.config.max_tokens,
                 }
 
                 if not self._model_name.startswith("gpt-5"):

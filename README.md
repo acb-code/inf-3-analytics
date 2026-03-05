@@ -2,6 +2,10 @@
 
 Infrastructure inspection video analytics pipeline with synchronized timestamps.
 
+## Demo
+
+![inf3-analytics demo](demo/demo.gif)
+
 ## Quick Start (Gemini Pipeline + Frontend)
 
 This walks through a full AI analytics pipeline using Gemini, then runs the frontend UI.

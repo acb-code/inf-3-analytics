@@ -48,6 +48,11 @@ const SITE_ENGINE_OPTIONS = [
   { value: "openai", label: "OpenAI" },
 ];
 
+const FRAME_ENGINE_OPTIONS = [
+  { value: "gemini", label: "Gemini" },
+  { value: "openai", label: "OpenAI" },
+];
+
 export default function RunDetailPage({ params }: PageProps) {
   const { run_id } = use(params);
   const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
@@ -67,6 +72,7 @@ export default function RunDetailPage({ params }: PageProps) {
   const [showSiteAnalytics, setShowSiteAnalytics] = useState(false);
   const [siteEngine, setSiteEngine] = useState("gemini");
   const [siteLanguage, setSiteLanguage] = useState("en");
+  const [frameEngine, setFrameEngine] = useState("gemini");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -110,7 +116,10 @@ export default function RunDetailPage({ params }: PageProps) {
   const handleStartPipeline = async () => {
     setActionError(null);
     try {
-      await api.startPipeline(run_id);
+      await api.startPipeline(run_id, {
+        frame_analytics_engine: frameEngine,
+        language: siteLanguage,
+      });
       setShowPipeline(true);
     } catch (err) {
       setActionError((err as Error).message);
@@ -288,7 +297,7 @@ export default function RunDetailPage({ params }: PageProps) {
               {EVENT_STEP_ORDER.map((step) => (
                 <button
                   key={step}
-                  onClick={() => handleRunStep(step)}
+                  onClick={() => handleRunStep(step, step === "frame_analytics" ? { frame_analytics_engine: frameEngine } : undefined)}
                   disabled={!isStepEnabled(step) || isAnyStepRunning}
                   className={`rounded px-3 py-1.5 text-sm ${
                     !isStepEnabled(step) || isAnyStepRunning
@@ -299,6 +308,17 @@ export default function RunDetailPage({ params }: PageProps) {
                   {STEP_LABELS[step]}
                 </button>
               ))}
+
+              {/* Frame engine selector */}
+              <select
+                value={frameEngine}
+                onChange={(e) => setFrameEngine(e.target.value)}
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+              >
+                {FRAME_ENGINE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
 
               {/* Divider */}
               <div className="mx-1 h-6 w-px bg-gray-300" />
