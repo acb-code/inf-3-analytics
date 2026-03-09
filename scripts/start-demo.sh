@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${INF3_MAX_UPLOAD_SIZE_MB:=300}"
 : "${NEXT_PUBLIC_INF3_API_BASE:=/api}"
 : "${BASIC_AUTH_USER:=tester}"
-: "${INF3_API_PORT:=8000}"
+: "${INF3_API_PORT:=8001}"
 : "${INF3_FRONTEND_PORT:=3000}"
 : "${INF3_CADDY_PORT:=8080}"
 
