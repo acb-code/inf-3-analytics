@@ -184,6 +184,14 @@ Environment Variables:
         help="Language code for output: en (English), fr (French) (default: en)",
     )
 
+    parser.add_argument(
+        "--event-id",
+        type=str,
+        default=None,
+        dest="event_id",
+        help="Filter processing to a specific event ID (optional)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -214,6 +222,10 @@ def main(args: list[str] | None = None) -> int:
     except Exception as e:
         print(f"Error loading manifest: {e}", file=sys.stderr)
         return 1
+
+    # Filter to a specific event if requested
+    if parsed.event_id:
+        print(f"Filtering to event: {parsed.event_id}")
 
     # Load events if provided
     events_by_id: dict[str, Event] = {}
@@ -307,6 +319,9 @@ def main(args: list[str] | None = None) -> int:
                 if frames_processed >= config.max_total_frames:
                     print(f"Reached max total frames limit ({config.max_total_frames})")
                     break
+
+                if parsed.event_id and efs.event_id != parsed.event_id:
+                    continue
 
                 event = events_by_id.get(efs.event_id)
                 event_title = event.title if event else efs.event_title

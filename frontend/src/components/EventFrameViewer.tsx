@@ -338,7 +338,7 @@ export function EventFrameViewer({
           </div>
 
           {/* Frame info bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-300">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-700 bg-gray-800 px-4 py-1 text-xs text-gray-300">
             <div className="flex items-center gap-3">
               <span>
                 Frame {currentIndex + 1} of {eventFrameSet.frames.length}
@@ -394,7 +394,47 @@ export function EventFrameViewer({
         {/* Analysis panel */}
         <div className="h-56 w-full flex-shrink-0 overflow-y-auto border-t border-gray-700 bg-gray-800 sm:h-64 xl:h-auto xl:w-80 xl:border-l xl:border-t-0">
           <div className="p-4">
-            <h4 className="mb-3 text-sm font-medium text-white">VLM Analysis</h4>
+            {/* TODO: Interframe consistency — When available, show consistency score badge
+                in event summary, highlight outlier frames in thumbnail strip with warning
+                icon, and show flip/stability details in a collapsible section. */}
+
+            {/* Event Summary — shown first for quick overview */}
+            {eventSummary && eventSummary.top_findings.length > 0 && (
+              <div className="mb-4 rounded-lg border border-gray-600 bg-gray-750 p-3">
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">
+                  Event Summary
+                </h4>
+                <div className="space-y-1.5">
+                  {eventSummary.top_findings.map((finding, idx) => (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-gray-200">{finding.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          {finding.severity && (
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-xs capitalize ${getSeverityColor(finding.severity as "low" | "medium" | "high")}`}
+                            >
+                              {finding.severity}
+                            </span>
+                          )}
+                          <span className="font-mono text-gray-300">
+                            {Math.round(finding.max_confidence * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-600">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{ width: `${Math.round(finding.max_confidence * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <h4 className="mb-3 text-sm font-medium text-white">Frame Analysis</h4>
 
             {loading ? (
               <div className="flex items-center justify-center py-8">
@@ -454,37 +494,6 @@ export function EventFrameViewer({
               </div>
             ) : (
               <p className="text-sm text-gray-400">No analysis available for this frame</p>
-            )}
-
-            {/* Event summary */}
-            {eventSummary && eventSummary.top_findings.length > 0 && (
-              <div className="mt-6 border-t border-gray-700 pt-4">
-                <h4 className="mb-3 text-sm font-medium text-white">
-                  Event Summary
-                </h4>
-                <div className="space-y-2">
-                  {eventSummary.top_findings.map((finding, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between rounded bg-gray-700 px-2 py-1 text-xs"
-                    >
-                      <span className="text-gray-200">{finding.label}</span>
-                      <div className="flex items-center gap-2">
-                        {finding.severity && (
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-xs capitalize ${getSeverityColor(finding.severity as "low" | "medium" | "high")}`}
-                          >
-                            {finding.severity}
-                          </span>
-                        )}
-                        <span className="text-gray-400">
-                          {Math.round(finding.max_confidence * 100)}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
         </div>

@@ -11,6 +11,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${INF3_API_PORT:=8001}"
 : "${INF3_FRONTEND_PORT:=3000}"
 : "${INF3_CADDY_PORT:=8080}"
+: "${NO_TUNNEL:=0}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -51,7 +52,9 @@ wait_for_port() {
 require_cmd uv
 require_cmd npm
 require_cmd caddy
-require_cmd cloudflared
+if [[ "$NO_TUNNEL" != "1" ]]; then
+  require_cmd cloudflared
+fi
 
 require_port_free "$INF3_API_PORT" "API"
 require_port_free "$INF3_FRONTEND_PORT" "Frontend"
@@ -78,10 +81,29 @@ esac
 mkdir -p "$INF3_DATA_ROOT/logs"
 
 # Generate Caddyfile with configured ports
+# flush_interval -1 disables response buffering on the API proxy, required for SSE streams
 CADDYFILE="$INF3_DATA_ROOT/logs/Caddyfile"
-printf '{\n  admin off\n}\n\n:%s {\n  basicauth {\n    %s %s\n  }\n\n  handle_path /api* {\n    reverse_proxy 127.0.0.1:%s\n  }\n\n  handle {\n    reverse_proxy 127.0.0.1:%s\n  }\n}\n' \
-  "$INF3_CADDY_PORT" "$BASIC_AUTH_USER" "$BASIC_AUTH_HASH" "$INF3_API_PORT" "$INF3_FRONTEND_PORT" \
-  >"$CADDYFILE"
+cat >"$CADDYFILE" <<CADDYEOF
+{
+  admin off
+}
+
+:${INF3_CADDY_PORT} {
+  basicauth {
+    ${BASIC_AUTH_USER} ${BASIC_AUTH_HASH}
+  }
+
+  handle_path /api* {
+    reverse_proxy 127.0.0.1:${INF3_API_PORT} {
+      flush_interval -1
+    }
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:${INF3_FRONTEND_PORT}
+  }
+}
+CADDYEOF
 
 cleanup() {
   echo "Stopping demo processes..."
@@ -119,6 +141,16 @@ echo "Starting Caddy..."
 CADDY_PID=$!
 wait_for_port "$INF3_CADDY_PORT" "Caddy" "$INF3_DATA_ROOT/logs/caddy.log"
 
-echo "Starting Cloudflare quick tunnel..."
-echo "Press Ctrl+C to stop everything."
-cloudflared tunnel --url "http://127.0.0.1:${INF3_CADDY_PORT}"
+if [[ "$NO_TUNNEL" == "1" ]]; then
+  echo ""
+  echo "Demo running locally (no tunnel)."
+  echo "  http://localhost:${INF3_CADDY_PORT}  (basic auth: ${BASIC_AUTH_USER} / <your password>)"
+  echo ""
+  echo "Press Ctrl+C to stop everything."
+  # Keep running until interrupted
+  while true; do sleep 60; done
+else
+  echo "Starting Cloudflare quick tunnel..."
+  echo "Press Ctrl+C to stop everything."
+  cloudflared tunnel --url "http://127.0.0.1:${INF3_CADDY_PORT}"
+fi

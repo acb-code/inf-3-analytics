@@ -1,5 +1,38 @@
 """Aggregation logic for event-level analytics summaries."""
 
+# TODO: Interframe Consistency Analysis
+#
+# Goal: Detect inconsistencies across frames within the same event to flag
+# unreliable detections and identify outlier frames.
+#
+# Proposed checks:
+# 1. Detection flip detection — Flag when a detection type appears in some
+#    frames but disappears in adjacent frames (e.g., crack detected in frame
+#    2 and 4 but not frame 3). Metric: presence_ratio per detection type.
+# 2. Confidence stability — Compute stddev of confidence scores per detection
+#    type across frames. High variance suggests model uncertainty.
+# 3. Outlier frame detection — Flag frames where the detection set differs
+#    significantly from the event's majority consensus (e.g., Jaccard distance
+#    of detection types vs. modal set > threshold).
+# 4. Severity consistency — Flag events where the same detection type gets
+#    different severity ratings across frames.
+#
+# Proposed output type:
+#   @dataclass(frozen=True)
+#   class InterframeConsistency:
+#       event_id: str
+#       detection_flip_flags: tuple[DetectionFlip, ...]  # type, frames where it flips
+#       confidence_stability: dict[str, float]  # detection_type -> stddev
+#       outlier_frames: tuple[int, ...]  # frame indices that are outliers
+#       severity_conflicts: tuple[SeverityConflict, ...]  # type, frame->severity map
+#       overall_consistency_score: float  # 0-1, higher = more consistent
+#
+# Integration points:
+# - Call from aggregate_event_results() after collecting all FrameAnalyticsResult
+# - Add to EventAnalyticsSummary as optional field
+# - Display in EventFrameViewer side panel as a consistency badge/section
+# - Flag outlier frames with a warning icon in the thumbnail strip
+
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime

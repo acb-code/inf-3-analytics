@@ -419,6 +419,7 @@ def run_frame_analytics(
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
     language: str = "en",
+    event_id: str | None = None,
 ) -> tuple[bool, str]:
     """Run the frame analytics step.
 
@@ -430,6 +431,7 @@ def run_frame_analytics(
         run_id: Optional run ID for process tracking
         registry: Optional registry for PID tracking
         language: Language code (e.g. "en", "fr")
+        event_id: Optional event ID to filter processing to a single event
 
     Returns:
         Tuple of (success, message)
@@ -454,6 +456,8 @@ def run_frame_analytics(
     ]
     if events_path.exists():
         args.extend(["--events", str(events_path)])
+    if event_id:
+        args.extend(["--event-id", event_id])
 
     cmd = _build_uv_command("inf3_analytics.cli.run_frame_analytics", args, extras)
     return _run_subprocess(
@@ -777,7 +781,7 @@ def execute_single_step(
     elif step == PipelineStep.FRAME_ANALYTICS:
         success, message = run_frame_analytics(
             run_root_obj, video_basename, request.frame_analytics_engine, on_output, run_id, registry,
-            language=language,
+            language=language, event_id=request.event_id or None,
         )
     elif step == PipelineStep.SITE_ANALYTICS:
         success, message = run_site_analytics(

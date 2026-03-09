@@ -14,6 +14,7 @@ from inf3_analytics.api.models import (
     CreateEventRequest,
     EventCommentResponse,
     RunMetadata,
+    UpdateEventRequest,
 )
 from inf3_analytics.io.comment_writer import (
     add_comment,
@@ -111,6 +112,45 @@ def create_event(
     write_events_json(new_event_list, events_path)
 
     return new_event.to_dict()
+
+
+@router.patch("/{event_id}", status_code=status.HTTP_200_OK)
+def update_event(
+    event_id: str,
+    request: UpdateEventRequest,
+    run: Annotated[RunMetadata, Depends(get_run_or_404)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Update an event (e.g. severity)."""
+    import dataclasses
+
+    run_root = Path(run.run_root)
+    validate_path_security(run_root, settings)
+
+    events_path = _get_events_path(run)
+    if not events_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No events file found")
+
+    event_list = read_events_json(events_path)
+    target = next((e for e in event_list.events if e.event_id == event_id), None)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Event {event_id} not found"
+        )
+
+    updated = dataclasses.replace(
+        target,
+        severity=EventSeverity(request.severity) if request.severity else None,
+    )
+    new_events = tuple(updated if e.event_id == event_id else e for e in event_list.events)
+    new_event_list = EventList(
+        events=new_events,
+        source_transcript_path=event_list.source_transcript_path,
+        extraction_engine=event_list.extraction_engine,
+        extraction_timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    write_events_json(new_event_list, events_path)
+    return updated.to_dict()
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_200_OK)

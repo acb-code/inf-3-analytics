@@ -20,6 +20,7 @@ import type {
   Event,
   SiteCountsTimeSeries,
   SiteAnalyticsFramesResponse,
+  UpdateEventRequest,
 } from "@/types/api";
 
 // Treat an explicitly-empty NEXT_PUBLIC_INF3_API_BASE as "same-origin" (root-relative paths).
@@ -378,6 +379,19 @@ export const api = {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new Error(error.detail || `Failed to create event: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  updateEvent: async (runId: string, eventId: string, request: UpdateEventRequest): Promise<Event> => {
+    const res = await fetch(`${API_BASE}/runs/${runId}/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to update event: ${res.status}`);
     }
     return res.json();
   },

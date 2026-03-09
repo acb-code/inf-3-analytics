@@ -9,11 +9,14 @@ interface EventListProps {
   currentTime: number;
   eventFrameSets?: EventFrameSet[];
   commentCounts?: Record<string, number>;
+  analyzingEventId?: string | null;
   onEventClick: (event: Event) => void;
   onViewFrames?: (event: Event, frameSet: EventFrameSet) => void;
   onAddEvent?: () => void;
   onDeleteEvent?: (event: Event) => void;
   onViewComments?: (event: Event) => void;
+  onAnalyzeEvent?: (event: Event) => void;
+  onUpdateSeverity?: (event: Event, severity: string | null) => void;
 }
 
 export function EventList({
@@ -21,11 +24,14 @@ export function EventList({
   currentTime,
   eventFrameSets,
   commentCounts,
+  analyzingEventId,
   onEventClick,
   onViewFrames,
   onAddEvent,
   onDeleteEvent,
   onViewComments,
+  onAnalyzeEvent,
+  onUpdateSeverity,
 }: EventListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -125,6 +131,7 @@ export function EventList({
                 isActive={isActive}
                 hasFrames={!!frameSet && frameSet.frames.length > 0}
                 commentCount={commentCounts?.[event.event_id]}
+                isAnalyzing={analyzingEventId === event.event_id}
                 onClick={() => onEventClick(event)}
                 onViewFrames={
                   frameSet && onViewFrames
@@ -133,6 +140,8 @@ export function EventList({
                 }
                 onDelete={onDeleteEvent ? () => onDeleteEvent(event) : undefined}
                 onViewComments={onViewComments ? () => onViewComments(event) : undefined}
+                onAnalyzeEvent={onAnalyzeEvent ? () => onAnalyzeEvent(event) : undefined}
+                onUpdateSeverity={onUpdateSeverity ? (sev) => onUpdateSeverity(event, sev) : undefined}
               />
             </div>
           );

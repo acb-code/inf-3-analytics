@@ -264,6 +264,11 @@ export interface TriggerPipelineRequest {
   language?: string;
   site_analytics_engine?: string;
   site_analytics_fps?: number;
+  event_id?: string | null;
+}
+
+export interface UpdateEventRequest {
+  severity?: string | null;
 }
 
 export interface DeleteRunResponse {

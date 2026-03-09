@@ -25,6 +25,14 @@ const STEP_LABELS: Record<PipelineStep, string> = {
   site_analytics: "Site Analytics",
 };
 
+const STEP_TOOLTIPS: Record<PipelineStep, string> = {
+  transcribe: "Extract audio and transcribe speech to text",
+  extract_events: "Identify inspection events from transcript",
+  extract_frames: "Sample video frames for each event",
+  frame_analytics: "Run VLM analysis on extracted frames",
+  site_analytics: "Detect equipment, personnel, and PPE across all frames",
+};
+
 // Event-based pipeline steps (run with "Run All Steps")
 const EVENT_STEP_ORDER: PipelineStep[] = [
   "transcribe",
@@ -73,6 +81,7 @@ export default function RunDetailPage({ params }: PageProps) {
   const [siteEngine, setSiteEngine] = useState("gemini");
   const [siteLanguage, setSiteLanguage] = useState("en");
   const [frameEngine, setFrameEngine] = useState("gemini");
+  const [analyzingEventId, setAnalyzingEventId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -170,6 +179,32 @@ export default function RunDetailPage({ params }: PageProps) {
     // Refresh events
     const eventsData = await api.getEvents(run_id).catch(() => ({ events: [] }));
     setEvents(eventsData.events || []);
+  };
+
+  const handleAnalyzeEvent = async (event: Event) => {
+    setActionError(null);
+    setAnalyzingEventId(event.event_id);
+    try {
+      await api.runPipelineStep(run_id, "frame_analytics", {
+        frame_analytics_engine: frameEngine,
+        event_id: event.event_id,
+      });
+      setShowPipeline(true);
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setAnalyzingEventId(null);
+    }
+  };
+
+  const handleUpdateEventSeverity = async (event: Event, severity: string | null) => {
+    setActionError(null);
+    try {
+      const updated = await api.updateEvent(run_id, event.event_id, { severity });
+      setEvents((prev) => prev.map((e) => (e.event_id === event.event_id ? updated : e)));
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
   };
 
   const handleDeleteEvent = async (event: Event) => {
@@ -280,6 +315,7 @@ export default function RunDetailPage({ params }: PageProps) {
             ) : (
               <button
                 onClick={handleStartPipeline}
+                title="Run transcribe, extract events, extract frames, and frame analytics in sequence"
                 className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 Run All Steps
@@ -297,6 +333,7 @@ export default function RunDetailPage({ params }: PageProps) {
               {EVENT_STEP_ORDER.map((step) => (
                 <button
                   key={step}
+                  title={STEP_TOOLTIPS[step]}
                   onClick={() => handleRunStep(step, step === "frame_analytics" ? { frame_analytics_engine: frameEngine } : undefined)}
                   disabled={!isStepEnabled(step) || isAnyStepRunning}
                   className={`rounded px-3 py-1.5 text-sm ${
@@ -310,15 +347,18 @@ export default function RunDetailPage({ params }: PageProps) {
               ))}
 
               {/* Frame engine selector */}
-              <select
-                value={frameEngine}
-                onChange={(e) => setFrameEngine(e.target.value)}
-                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
-              >
-                {FRAME_ENGINE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              <div className="flex flex-col">
+                <select
+                  value={frameEngine}
+                  onChange={(e) => setFrameEngine(e.target.value)}
+                  className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+                >
+                  {FRAME_ENGINE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <span className="mt-0.5 text-xs text-gray-400">VLM engine for frame analysis</span>
+              </div>
 
               {/* Divider */}
               <div className="mx-1 h-6 w-px bg-gray-300" />
@@ -326,6 +366,7 @@ export default function RunDetailPage({ params }: PageProps) {
               {/* Site Analytics button */}
               <button
                 onClick={handleRunSiteAnalytics}
+                title={STEP_TOOLTIPS["site_analytics"]}
                 disabled={isAnyStepRunning}
                 className={`rounded px-3 py-1.5 text-sm ${
                   isAnyStepRunning
@@ -336,31 +377,40 @@ export default function RunDetailPage({ params }: PageProps) {
                 Site Analytics
               </button>
 
-              {/* Engine selector */}
-              <select
-                value={siteEngine}
-                onChange={(e) => setSiteEngine(e.target.value)}
-                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
-              >
-                {SITE_ENGINE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              {/* Site engine selector */}
+              <div className="flex flex-col">
+                <select
+                  value={siteEngine}
+                  onChange={(e) => setSiteEngine(e.target.value)}
+                  className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+                >
+                  {SITE_ENGINE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <span className="mt-0.5 text-xs text-gray-400">Detection engine for site analytics</span>
+              </div>
 
               {/* Language toggle */}
-              <div className="inline-flex rounded border border-gray-300 text-sm">
-                <button
-                  onClick={() => setSiteLanguage("en")}
-                  className={`px-2 py-1 ${siteLanguage === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              <div className="flex flex-col">
+                <div
+                  className="inline-flex rounded border border-gray-300 text-sm"
+                  title="Analysis and prompt language"
                 >
-                  EN
-                </button>
-                <button
-                  onClick={() => setSiteLanguage("fr")}
-                  className={`px-2 py-1 ${siteLanguage === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-                >
-                  FR
-                </button>
+                  <button
+                    onClick={() => setSiteLanguage("en")}
+                    className={`px-2 py-1 ${siteLanguage === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    EN
+                  </button>
+                  <button
+                    onClick={() => setSiteLanguage("fr")}
+                    className={`px-2 py-1 ${siteLanguage === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    FR
+                  </button>
+                </div>
+                <span className="mt-0.5 text-xs text-gray-400">Analysis language</span>
               </div>
 
               {/* View Site Analytics button (when completed) */}
@@ -412,11 +462,14 @@ export default function RunDetailPage({ params }: PageProps) {
               currentTime={currentTime}
               eventFrameSets={eventFrameSets}
               commentCounts={commentCounts}
+              analyzingEventId={analyzingEventId}
               onEventClick={handleEventClick}
               onViewFrames={handleViewFrames}
               onAddEvent={handleAddEvent}
               onDeleteEvent={handleDeleteEvent}
               onViewComments={handleViewComments}
+              onAnalyzeEvent={handleAnalyzeEvent}
+              onUpdateSeverity={handleUpdateEventSeverity}
             />
           </div>
         </div>

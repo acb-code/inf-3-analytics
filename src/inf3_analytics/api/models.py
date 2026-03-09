@@ -222,6 +222,9 @@ class TriggerPipelineRequest(BaseModel):
     site_analytics_fps: float = Field(
         default=0.5, description="Frames per second for site analytics extraction"
     )
+    event_id: str | None = Field(
+        default=None, description="Filter frame analytics to a specific event ID"
+    )
 
 
 # Decomposition models
@@ -342,6 +345,12 @@ class CreateEventRequest(BaseModel):
     severity: str | None = Field(None, description="Severity level (low, medium, high)")
     title: str = Field(..., description="Event title")
     summary: str = Field(..., description="Event summary/description")
+
+
+class UpdateEventRequest(BaseModel):
+    """Request to update an event's fields."""
+
+    severity: str | None = Field(None, description="Severity: low, medium, high, or null")
 
 
 class CreateCommentRequest(BaseModel):
