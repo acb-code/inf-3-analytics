@@ -281,6 +281,23 @@ export default function RunDetailPage({ params }: PageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div
+              className="inline-flex rounded border border-gray-300 text-sm"
+              title="Analysis and prompt language"
+            >
+              <button
+                onClick={() => setLang("en")}
+                className={`px-2 py-1 ${lang === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => setLang("fr")}
+                className={`px-2 py-1 ${lang === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              >
+                FR
+              </button>
+            </div>
             {(hasSiteAnalyticsArtifact || isSiteAnalyticsCompleted) && (
               <button
                 onClick={() => setShowSiteAnalytics(true)}
@@ -353,27 +370,6 @@ export default function RunDetailPage({ params }: PageProps) {
               >
                 {t("detail.siteAnalytics")}
               </button>
-            </div>
-            {/* Language toggle — shared across both tabs */}
-            <div className="flex items-center gap-1.5 pb-1">
-              <span className="text-xs text-gray-400">{t("detail.language")}</span>
-              <div
-                className="inline-flex rounded border border-gray-300 text-sm"
-                title="Analysis and prompt language"
-              >
-                <button
-                  onClick={() => setLang("en")}
-                  className={`px-2 py-1 ${lang === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-                >
-                  EN
-                </button>
-                <button
-                  onClick={() => setLang("fr")}
-                  className={`px-2 py-1 ${lang === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-                >
-                  FR
-                </button>
-              </div>
             </div>
           </div>
 
