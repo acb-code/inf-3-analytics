@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import { SplitTimeline } from "@/components/SplitTimeline";
 import { SplitPointEditor } from "@/components/SplitPointEditor";
 import { DecompositionProgress } from "@/components/DecompositionProgress";
@@ -31,6 +32,7 @@ function formatDuration(seconds: number): string {
 
 export default function DecomposePage() {
   const router = useRouter();
+  const { t } = useLanguage();
 
   // Step state
   const [currentStep, setCurrentStep] = useState<Step>("upload");
@@ -265,13 +267,13 @@ export default function DecomposePage() {
     <div className="mx-auto max-w-4xl p-6">
       <header className="mb-6">
         <Link href="/runs" className="text-gray-600 hover:text-gray-900">
-          &larr; Back to Runs
+          {t("decompose.back")}
         </Link>
         <h1 className="mt-4 text-2xl font-bold text-gray-900">
-          Video Decomposition
+          {t("decompose.title")}
         </h1>
         <p className="text-gray-600">
-          Split large videos into smaller segments for efficient processing
+          {t("decompose.description")}
         </p>
       </header>
 
@@ -310,11 +312,11 @@ export default function DecomposePage() {
           )}
         </div>
         <div className="flex justify-between mt-2 text-xs text-gray-500">
-          <span>Upload</span>
-          <span>Analyze</span>
-          <span>Review</span>
-          <span>Execute</span>
-          <span>Complete</span>
+          <span>{t("decompose.step.upload")}</span>
+          <span>{t("decompose.step.analyze")}</span>
+          <span>{t("decompose.step.review")}</span>
+          <span>{t("decompose.step.execute")}</span>
+          <span>{t("decompose.step.complete")}</span>
         </div>
       </div>
 
@@ -329,12 +331,12 @@ export default function DecomposePage() {
       {currentStep === "upload" && (
         <div className="space-y-6">
           <h2 className="text-lg font-medium text-gray-900">
-            Step 1: Select Video
+            {t("decompose.selectVideo")}
           </h2>
 
           {/* Target duration setting */}
           <div className="flex items-center gap-4">
-            <label className="text-sm text-gray-600">Target segment duration:</label>
+            <label className="text-sm text-gray-600">{t("decompose.targetDuration")}</label>
             <select
               value={targetDuration}
               onChange={(e) => setTargetDuration(Number(e.target.value))}
@@ -387,7 +389,7 @@ export default function DecomposePage() {
                     onClick={() => setFile(null)}
                     className="text-sm text-red-600 hover:text-red-800"
                   >
-                    Remove
+                    {t("decompose.remove")}
                   </button>
                 )}
               </div>
@@ -408,9 +410,9 @@ export default function DecomposePage() {
                 </svg>
                 <div>
                   <p className="text-gray-700">
-                    Drag and drop a video file here, or{" "}
+                    {t("decompose.dragDrop")}{" "}
                     <label className="cursor-pointer text-blue-600 hover:text-blue-800">
-                      browse
+                      {t("decompose.browse")}
                       <input
                         type="file"
                         className="hidden"
@@ -431,7 +433,7 @@ export default function DecomposePage() {
           {uploading && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Uploading...</span>
+                <span className="text-gray-600">{t("decompose.uploading")}</span>
                 <span className="font-medium">{uploadProgress}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -453,7 +455,7 @@ export default function DecomposePage() {
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {uploading ? "Uploading..." : "Upload & Analyze"}
+            {uploading ? t("decompose.uploading") : t("decompose.uploadAnalyze")}
           </button>
         </div>
       )}
@@ -462,10 +464,8 @@ export default function DecomposePage() {
       {currentStep === "analyze" && (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4" />
-          <p className="text-gray-600">Analyzing video for optimal split points...</p>
-          <p className="text-sm text-gray-500 mt-2">
-            This may take a few seconds for long videos
-          </p>
+          <p className="text-gray-600">{t("decompose.analyzing")}</p>
+          <p className="text-sm text-gray-500 mt-2">{t("decompose.analyzingNote")}</p>
         </div>
       )}
 
@@ -473,7 +473,7 @@ export default function DecomposePage() {
       {currentStep === "review" && plan && (
         <div className="space-y-6">
           <h2 className="text-lg font-medium text-gray-900">
-            Step 2: Review Split Points
+            {t("decompose.reviewSplits")}
           </h2>
 
           {/* Video info */}
@@ -494,7 +494,7 @@ export default function DecomposePage() {
 
           {/* Timeline */}
           <div className="p-4 bg-white rounded-lg border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">Timeline</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-4">{t("decompose.timeline")}</h3>
             <SplitTimeline
               durationS={plan.duration_s}
               splitPoints={splitPoints}
@@ -506,7 +506,7 @@ export default function DecomposePage() {
           {/* Split point editor */}
           <div className="p-4 bg-white rounded-lg border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-4">
-              Split Points
+              {t("decompose.splitPoints")}
             </h3>
             <SplitPointEditor
               splitPoints={splitPoints}
@@ -522,7 +522,7 @@ export default function DecomposePage() {
 
           {/* Options */}
           <div className="p-4 bg-white rounded-lg border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">Options</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-4">{t("decompose.options")}</h3>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -531,7 +531,7 @@ export default function DecomposePage() {
                 className="rounded border-gray-300"
               />
               <span className="text-sm text-gray-700">
-                Create separate runs for each segment (recommended)
+                {t("decompose.createChildRuns")}
               </span>
             </label>
           </div>
@@ -556,7 +556,7 @@ export default function DecomposePage() {
               }}
               className="px-4 py-2 text-gray-600 hover:text-gray-800"
             >
-              Cancel
+              {t("decompose.cancel")}
             </button>
             <button
               onClick={handleExecute}
@@ -567,7 +567,7 @@ export default function DecomposePage() {
                   : "bg-blue-600 hover:bg-blue-700"
               }`}
             >
-              Start Decomposition
+              {t("decompose.startDecomposition")}
             </button>
           </div>
         </div>
@@ -577,7 +577,7 @@ export default function DecomposePage() {
       {currentStep === "execute" && jobId && (
         <div className="space-y-6">
           <h2 className="text-lg font-medium text-gray-900">
-            Step 3: Decomposing Video
+            {t("decompose.executing")}
           </h2>
           <DecompositionProgress
             jobId={jobId}
@@ -604,12 +604,12 @@ export default function DecomposePage() {
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <h2 className="text-lg font-medium">Decomposition Complete</h2>
+            <h2 className="text-lg font-medium">{t("decompose.complete")}</h2>
           </div>
 
           <p className="text-gray-600">
-            Created {completedSegments.length} segments
-            {childRunIds.length > 0 && ` with ${childRunIds.length} child runs`}
+            {t("decompose.createdSegments").replace("{count}", String(completedSegments.length))}
+            {childRunIds.length > 0 && ` ${t("decompose.withChildRuns").replace("{count}", String(childRunIds.length))}`}
           </p>
 
           {/* Segments table */}
@@ -680,14 +680,14 @@ export default function DecomposePage() {
               href="/runs"
               className="px-4 py-2 text-gray-600 hover:text-gray-800"
             >
-              Go to Runs List
+              {t("decompose.goToRunsList")}
             </Link>
             {childRunIds.length > 0 && (
               <Link
                 href={`/runs/${childRunIds[0]}`}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                View First Segment
+                {t("decompose.viewFirstSegment")}
               </Link>
             )}
           </div>

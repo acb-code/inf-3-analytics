@@ -414,7 +414,7 @@ def run_frame_extraction(
 def run_frame_analytics(
     run_root: Path,
     video_basename: str,
-    engine: str = "gemini",
+    engine: str = "openai",
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
@@ -473,7 +473,7 @@ def _get_site_analytics_dir(run_root: Path) -> Path:
 def run_site_analytics(
     video_path: Path,
     run_root: Path,
-    engine: str = "yolo",
+    engine: str = "openai",
     fps: float = 0.5,
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,

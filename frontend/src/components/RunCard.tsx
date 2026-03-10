@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { RunMetadata } from "@/types/api";
 import { formatDate } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 interface RunCardProps {
   run: RunMetadata;
@@ -11,6 +12,7 @@ interface RunCardProps {
 }
 
 function StatusBadge({ status }: { status: RunMetadata["status"] }) {
+  const { t } = useLanguage();
   const colors = {
     created: "bg-gray-100 text-gray-800",
     running: "bg-blue-100 text-blue-800",
@@ -20,13 +22,14 @@ function StatusBadge({ status }: { status: RunMetadata["status"] }) {
 
   return (
     <span className={`rounded-full px-2 py-1 text-xs font-medium ${colors[status]}`}>
-      {status}
+      {t(`status.${status}` as Parameters<typeof t>[0])}
     </span>
   );
 }
 
 export function RunCard({ run, onDelete, deleting = false }: RunCardProps) {
   const router = useRouter();
+  const { t } = useLanguage();
 
   const handleNavigate = () => {
     router.push(`/runs/${run.run_id}`);
@@ -62,7 +65,7 @@ export function RunCard({ run, onDelete, deleting = false }: RunCardProps) {
               className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
               disabled={deleting || run.status === "running"}
             >
-              {deleting ? "Deleting..." : "Delete"}
+              {deleting ? t("common.deleting") : t("common.delete")}
             </button>
           )}
         </div>

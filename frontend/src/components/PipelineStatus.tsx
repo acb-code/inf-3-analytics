@@ -13,6 +13,8 @@ interface PipelineStatusProps {
   useSSE?: boolean;
   /** Fall back to polling if no SSE events within this window (ms) */
   sseIdleTimeoutMs?: number;
+  /** Only display these steps (default: show all) */
+  filterSteps?: PipelineStep[];
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -184,6 +186,7 @@ export function PipelineStatus({
   pollInterval = POLL_INTERVAL_MS,
   useSSE = !DISABLE_SSE,
   sseIdleTimeoutMs = SSE_IDLE_TIMEOUT_MS,
+  filterSteps,
 }: PipelineStatusProps) {
   const [status, setStatus] = useState<PipelineStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -381,7 +384,7 @@ export function PipelineStatus({
 
       {/* Steps list */}
       <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-        {status.steps.map((step) => (
+        {status.steps.filter((s) => !filterSteps || filterSteps.includes(s.step)).map((step) => (
           <div key={step.step} className="px-4">
             <StepRow
               step={step}

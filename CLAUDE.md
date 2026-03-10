@@ -65,8 +65,9 @@ Prefer conciseness and simplicity.
 Frame analytics prioritizes vision-language models for infrastructure inspection:
 
 ### Engine Priority
-1. **Primary**: VLM engines (Gemini, OpenAI) for semantic understanding
-2. **Fallback**: Baseline quality metrics for image QA when VLM unavailable
+1. **Primary**: OpenAI (default for frame analytics and site analytics)
+2. **Secondary**: Gemini VLM for semantic understanding
+3. **Fallback**: Baseline quality metrics for image QA when VLM unavailable; YOLO for local site analytics
 
 ### Prompt Versioning
 Prompts are versioned and stored in code (`prompting.py`):

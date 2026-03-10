@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 
 const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
 const MAX_SIZE_MB = 2048;
@@ -20,6 +21,7 @@ function formatDuration(seconds: number): string {
 
 export default function UploadPage() {
   const router = useRouter();
+  const { lang, setLang, t } = useLanguage();
   const [file, setFile] = useState<File | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -28,7 +30,6 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDecomposePrompt, setShowDecomposePrompt] = useState(false);
   const [dismissedPrompt, setDismissedPrompt] = useState(false);
-  const [language, setLanguage] = useState<"en" | "fr">("en");
 
   // Check video duration when file changes
   useEffect(() => {
@@ -46,7 +47,6 @@ export default function UploadPage() {
       const duration = video.duration;
       setVideoDuration(duration);
 
-      // Show decompose prompt for long videos (unless already dismissed)
       if (duration > LONG_VIDEO_THRESHOLD_MINUTES * 60 && !dismissedPrompt) {
         setShowDecomposePrompt(true);
       }
@@ -54,7 +54,6 @@ export default function UploadPage() {
 
     video.onerror = () => {
       URL.revokeObjectURL(video.src);
-      // Can't determine duration, proceed without prompt
       setVideoDuration(null);
     };
 
@@ -128,14 +127,13 @@ export default function UploadPage() {
     setError(null);
 
     try {
-      const result = await api.uploadVideo(file, setProgress, language);
-      // Redirect to run detail page
+      const result = await api.uploadVideo(file, setProgress, lang);
       router.push(`/runs/${result.run_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setUploading(false);
     }
-  }, [file, router, language]);
+  }, [file, router, lang]);
 
   const handleRemove = useCallback(() => {
     setFile(null);
@@ -157,12 +155,10 @@ export default function UploadPage() {
     <div className="mx-auto max-w-2xl p-6">
       <header className="mb-6">
         <Link href="/runs" className="text-gray-600 hover:text-gray-900">
-          &larr; Back to Runs
+          {t("upload.back")}
         </Link>
-        <h1 className="mt-4 text-2xl font-bold text-gray-900">Upload Video</h1>
-        <p className="text-gray-600">
-          Upload a video file to start the analytics pipeline
-        </p>
+        <h1 className="mt-4 text-2xl font-bold text-gray-900">{t("upload.title")}</h1>
+        <p className="mt-2 text-gray-600">{t("upload.description")}</p>
       </header>
 
       {/* Decompose link */}
@@ -183,14 +179,13 @@ export default function UploadPage() {
           </svg>
           <div>
             <p className="text-sm text-gray-700">
-              <strong>Have a long video?</strong> Split it into smaller segments first for
-              better reliability and parallel processing.
+              <strong>{t("upload.haveALongVideo")}</strong> {t("upload.decomposeSuggestion")}
             </p>
             <Link
               href="/decompose"
               className="inline-block mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
-              Go to Video Decomposition &rarr;
+              {t("upload.decomposeLink")}
             </Link>
           </div>
         </div>
@@ -239,7 +234,7 @@ export default function UploadPage() {
                 onClick={handleRemove}
                 className="text-sm text-red-600 hover:text-red-800"
               >
-                Remove
+                {t("upload.remove")}
               </button>
             )}
           </div>
@@ -260,9 +255,9 @@ export default function UploadPage() {
             </svg>
             <div>
               <p className="text-gray-700">
-                Drag and drop a video file here, or{" "}
+                {t("upload.dragDrop")}{" "}
                 <label className="cursor-pointer text-blue-600 hover:text-blue-800">
-                  browse
+                  {t("upload.browse")}
                   <input
                     type="file"
                     className="hidden"
@@ -298,24 +293,21 @@ export default function UploadPage() {
             </svg>
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800">
-                This video is {formatDuration(videoDuration!)} long
+                {t("upload.longVideoTitle").replace("{duration}", formatDuration(videoDuration!))}
               </p>
-              <p className="mt-1 text-sm text-amber-700">
-                Long videos may experience timeouts or failures during processing.
-                Consider splitting it into smaller segments first.
-              </p>
+              <p className="mt-1 text-sm text-amber-700">{t("upload.longVideoBody")}</p>
               <div className="mt-3 flex gap-3">
                 <Link
                   href="/decompose"
                   className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-amber-600 rounded hover:bg-amber-700"
                 >
-                  Decompose Video
+                  {t("upload.decompose")}
                 </Link>
                 <button
                   onClick={handleDismissPrompt}
                   className="px-3 py-1.5 text-sm text-amber-700 hover:text-amber-900"
                 >
-                  Continue anyway
+                  {t("upload.continueAnyway")}
                 </button>
               </div>
             </div>
@@ -326,15 +318,15 @@ export default function UploadPage() {
       {/* Language selector */}
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Language
+          {t("upload.language")}
         </label>
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setLanguage("en")}
+            onClick={() => setLang("en")}
             disabled={uploading}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              language === "en"
+              lang === "en"
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
             } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -343,10 +335,10 @@ export default function UploadPage() {
           </button>
           <button
             type="button"
-            onClick={() => setLanguage("fr")}
+            onClick={() => setLang("fr")}
             disabled={uploading}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              language === "fr"
+              lang === "fr"
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
             } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -355,9 +347,7 @@ export default function UploadPage() {
           </button>
         </div>
         <p className="mt-1 text-xs text-gray-500">
-          {language === "fr"
-            ? "Transcription, événements et analyses seront en français"
-            : "Transcription, events, and analytics will be in English"}
+          {lang === "fr" ? t("upload.languageHint.fr") : t("upload.languageHint")}
         </p>
       </div>
 
@@ -372,7 +362,7 @@ export default function UploadPage() {
       {uploading && (
         <div className="mt-4 space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Uploading...</span>
+            <span className="text-gray-600">{t("upload.uploading")}</span>
             <span className="font-medium">{progress}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -395,12 +385,11 @@ export default function UploadPage() {
               : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
-          {uploading ? "Uploading..." : "Upload Video"}
+          {uploading ? t("upload.uploading") : t("upload.uploadButton")}
         </button>
         {isLongVideo && !showDecomposePrompt && (
           <p className="mt-2 text-center text-xs text-gray-500">
-            This is a long video ({formatDuration(videoDuration!)}).
-            Processing may take a while.
+            {t("upload.longVideoNote").replace("{duration}", formatDuration(videoDuration!))}
           </p>
         )}
       </div>

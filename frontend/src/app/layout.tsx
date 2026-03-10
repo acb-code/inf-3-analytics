@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Inf3 Analytics",
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50">{children}</body>
+      <body className="min-h-screen bg-gray-50">
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }

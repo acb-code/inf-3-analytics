@@ -6,8 +6,10 @@ import { api } from "@/lib/api";
 import type { RunMetadata } from "@/types/api";
 import { RunCard } from "@/components/RunCard";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { useLanguage } from "@/lib/i18n";
 
 export default function RunsPage() {
+  const { lang, setLang, t } = useLanguage();
   const [runs, setRuns] = useState<RunMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export default function RunsPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          <p className="font-medium">Error loading runs</p>
+          <p className="font-medium">{t("home.errorLoading")}</p>
           <p className="text-sm">{error}</p>
         </div>
       </div>
@@ -69,18 +71,56 @@ export default function RunsPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <header className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inspection Runs</h1>
-          <p className="text-gray-600">Select a run to view video and events</p>
+      {/* Branded header */}
+      <header className="mb-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                {t("home.appName")}
+              </h1>
+              {/* FR/EN toggle */}
+              <div className="inline-flex rounded border border-gray-300 text-sm">
+                <button
+                  onClick={() => setLang("en")}
+                  className={`px-3 py-1 ${
+                    lang === "en"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setLang("fr")}
+                  className={`px-3 py-1 ${
+                    lang === "fr"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  FR
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-base font-medium text-blue-700">{t("home.tagline")}</p>
+            <p className="mt-3 max-w-2xl text-sm text-gray-600">{t("home.description")}</p>
+            <p className="mt-2 text-xs text-gray-400">{t("home.capabilities")}</p>
+          </div>
+          <Link
+            href="/upload"
+            className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+          >
+            {t("home.uploadVideo")}
+          </Link>
         </div>
-        <Link
-          href="/upload"
-          className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-        >
-          Upload Video
-        </Link>
       </header>
+
+      {/* Divider */}
+      <div className="mb-6 border-t border-gray-200" />
+
+      {/* Runs subtitle */}
+      <p className="mb-4 text-sm text-gray-500">{t("home.selectRun")}</p>
 
       {actionError && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -90,7 +130,7 @@ export default function RunsPage() {
 
       {runs.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
-          No runs found. Process a video to get started.
+          {t("home.noRuns")}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -211,13 +211,13 @@ class TriggerPipelineRequest(BaseModel):
         default="openai", description="Event extraction engine: openai, gemini, rules"
     )
     frame_analytics_engine: str = Field(
-        default="gemini", description="Frame analytics engine: gemini, openai, baseline_quality"
+        default="openai", description="Frame analytics engine: openai, gemini, baseline_quality"
     )
     language: str = Field(
         default="en", description="Language code: en (English), fr (French)"
     )
     site_analytics_engine: str = Field(
-        default="gemini", description="Site analytics engine: yolo, gemini, openai"
+        default="openai", description="Site analytics engine: openai, gemini, yolo"
     )
     site_analytics_fps: float = Field(
         default=0.5, description="Frames per second for site analytics extraction"

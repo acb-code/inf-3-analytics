@@ -123,9 +123,9 @@ Environment Variables:
     parser.add_argument(
         "--engine",
         type=str,
-        default="gemini",
+        default="openai",
         choices=list_engines(),
-        help="Analytics engine: gemini (default), openai, or baseline_quality",
+        help="Analytics engine: openai (default), gemini, or baseline_quality",
     )
 
     parser.add_argument(

@@ -12,26 +12,12 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { PipelineStatus } from "@/components/PipelineStatus";
 import { AddEventModal } from "@/components/AddEventModal";
 import { EventComments } from "@/components/EventComments";
+import { useLanguage } from "@/lib/i18n";
 
 interface PageProps {
   params: Promise<{ run_id: string }>;
 }
 
-const STEP_LABELS: Record<PipelineStep, string> = {
-  transcribe: "Transcribe",
-  extract_events: "Extract Events",
-  extract_frames: "Extract Frames",
-  frame_analytics: "Analyze Frames",
-  site_analytics: "Site Analytics",
-};
-
-const STEP_TOOLTIPS: Record<PipelineStep, string> = {
-  transcribe: "Extract audio and transcribe speech to text",
-  extract_events: "Identify inspection events from transcript",
-  extract_frames: "Sample video frames for each event",
-  frame_analytics: "Run VLM analysis on extracted frames",
-  site_analytics: "Detect equipment, personnel, and PPE across all frames",
-};
 
 // Event-based pipeline steps (run with "Run All Steps")
 const EVENT_STEP_ORDER: PipelineStep[] = [
@@ -51,18 +37,27 @@ const STEP_PREREQUISITES: Record<PipelineStep, PipelineStep[]> = {
 };
 
 const SITE_ENGINE_OPTIONS = [
-  { value: "yolo", label: "YOLO" },
-  { value: "gemini", label: "Gemini" },
   { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
+  { value: "yolo", label: "YOLO" },
 ];
 
 const FRAME_ENGINE_OPTIONS = [
-  { value: "gemini", label: "Gemini" },
   { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
 ];
+
+const CAPABILITY_KEYS = [
+  { name: "cap.transcription.name", desc: "cap.transcription.desc" },
+  { name: "cap.events.name", desc: "cap.events.desc" },
+  { name: "cap.frames.name", desc: "cap.frames.desc" },
+  { name: "cap.frameAnalytics.name", desc: "cap.frameAnalytics.desc" },
+  { name: "cap.siteAnalytics.name", desc: "cap.siteAnalytics.desc" },
+] as const;
 
 export default function RunDetailPage({ params }: PageProps) {
   const { run_id } = use(params);
+  const { lang, setLang, t } = useLanguage();
   const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventFrameSets, setEventFrameSets] = useState<EventFrameSet[]>([]);
@@ -71,16 +66,17 @@ export default function RunDetailPage({ params }: PageProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedFrameSet, setSelectedFrameSet] = useState<EventFrameSet | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatusResponse | null>(null);
-  const [showPipeline, setShowPipeline] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [activeTab, setActiveTab] = useState<"pipeline" | "site_analytics">("pipeline");
+  const [showCapabilities, setShowCapabilities] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [selectedEventForComments, setSelectedEventForComments] = useState<Event | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
   const [showSiteAnalytics, setShowSiteAnalytics] = useState(false);
-  const [siteEngine, setSiteEngine] = useState("gemini");
-  const [siteLanguage, setSiteLanguage] = useState("en");
-  const [frameEngine, setFrameEngine] = useState("gemini");
+  const [siteEngine, setSiteEngine] = useState("openai");
+  const [frameEngine, setFrameEngine] = useState("openai");
   const [analyzingEventId, setAnalyzingEventId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -96,7 +92,6 @@ export default function RunDetailPage({ params }: PageProps) {
       setEvents(eventsData.events || []);
       setEventFrameSets(framesManifest.event_frame_sets || []);
       setPipelineStatus(pipelineData);
-      if (runData.run.language) setSiteLanguage(runData.run.language);
       setLoading(false);
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
@@ -127,9 +122,9 @@ export default function RunDetailPage({ params }: PageProps) {
     try {
       await api.startPipeline(run_id, {
         frame_analytics_engine: frameEngine,
-        language: siteLanguage,
+        language: lang,
       });
-      setShowPipeline(true);
+      setShowAnalytics(true);
     } catch (err) {
       setActionError((err as Error).message);
     }
@@ -148,7 +143,7 @@ export default function RunDetailPage({ params }: PageProps) {
     setActionError(null);
     try {
       await api.runPipelineStep(run_id, step, request);
-      setShowPipeline(true);
+      setShowAnalytics(true);
     } catch (err) {
       setActionError((err as Error).message);
     }
@@ -157,14 +152,13 @@ export default function RunDetailPage({ params }: PageProps) {
   const handleRunSiteAnalytics = async () => {
     await handleRunStep("site_analytics", {
       site_analytics_engine: siteEngine,
-      language: siteLanguage,
+      language: lang,
     });
   };
 
-  const handlePipelineComplete = () => {
-    // Refresh data after pipeline completes
+  const handlePipelineComplete = useCallback(() => {
     fetchData();
-  };
+  }, [fetchData]);
 
   const handlePipelineStatusUpdate = useCallback((status: PipelineStatusResponse) => {
     setPipelineStatus(status);
@@ -176,7 +170,6 @@ export default function RunDetailPage({ params }: PageProps) {
 
   const handleCreateEvent = async (request: CreateEventRequest) => {
     await api.createEvent(run_id, request);
-    // Refresh events
     const eventsData = await api.getEvents(run_id).catch(() => ({ events: [] }));
     setEvents(eventsData.events || []);
   };
@@ -188,8 +181,9 @@ export default function RunDetailPage({ params }: PageProps) {
       await api.runPipelineStep(run_id, "frame_analytics", {
         frame_analytics_engine: frameEngine,
         event_id: event.event_id,
+        language: lang,
       });
-      setShowPipeline(true);
+      setShowAnalytics(true);
     } catch (err) {
       setActionError((err as Error).message);
     } finally {
@@ -227,7 +221,7 @@ export default function RunDetailPage({ params }: PageProps) {
 
   const isStepEnabled = (step: PipelineStep): boolean => {
     const prereqs = STEP_PREREQUISITES[step] || [];
-    if (prereqs.length === 0) return true; // No prerequisites
+    if (prereqs.length === 0) return true;
     if (!pipelineStatus) return false;
 
     return prereqs.every((prereq) => {
@@ -240,7 +234,6 @@ export default function RunDetailPage({ params }: PageProps) {
     (s) => s.step === "site_analytics"
   )?.status === "completed";
 
-  // Check if site analytics artifacts are available (works even when pipeline panel is closed)
   const hasSiteAnalyticsArtifact = runDetail?.artifacts.some(
     (a) => a.type === "site_analytics" && a.available
   ) ?? false;
@@ -259,10 +252,10 @@ export default function RunDetailPage({ params }: PageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          <p className="font-medium">Error loading run</p>
-          <p className="text-sm">{error || "Run not found"}</p>
+          <p className="font-medium">{t("detail.errorLoading")}</p>
+          <p className="text-sm">{error || t("detail.notFound")}</p>
           <Link href="/runs" className="mt-2 inline-block text-sm underline">
-            Back to runs
+            {t("detail.backToRuns")}
           </Link>
         </div>
       </div>
@@ -277,11 +270,8 @@ export default function RunDetailPage({ params }: PageProps) {
       <header className="border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <Link
-              href="/runs"
-              className="text-gray-600 hover:text-gray-900"
-            >
-              &larr; Runs
+            <Link href="/runs" className="text-gray-600 hover:text-gray-900">
+              &larr; {t("detail.runs")}
             </Link>
             <div className="min-w-0">
               <h1 className="break-all font-mono text-lg font-medium text-gray-900">
@@ -296,143 +286,225 @@ export default function RunDetailPage({ params }: PageProps) {
                 onClick={() => setShowSiteAnalytics(true)}
                 className="rounded border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100"
               >
-                View Site Analytics
+                {t("detail.viewSiteAnalytics")}
               </button>
             )}
             <button
-              onClick={() => setShowPipeline(!showPipeline)}
+              onClick={() => setShowAnalytics(!showAnalytics)}
               className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
             >
-              {showPipeline ? "Hide Pipeline" : "Show Pipeline"}
+              {showAnalytics ? t("detail.hideAnalytics") : t("detail.showAnalytics")}
             </button>
-            {isAnyStepRunning ? (
-              <button
-                onClick={handleCancelPipeline}
-                className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Cancel Pipeline
-              </button>
-            ) : (
-              <button
-                onClick={handleStartPipeline}
-                title="Run transcribe, extract events, extract frames, and frame analytics in sequence"
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Run All Steps
-              </button>
-            )}
           </div>
         </div>
       </header>
 
-      {/* Pipeline panel */}
-      {showPipeline && (
-        <div className="border-b border-gray-200 bg-gray-50 p-4">
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {EVENT_STEP_ORDER.map((step) => (
-                <button
-                  key={step}
-                  title={STEP_TOOLTIPS[step]}
-                  onClick={() => handleRunStep(step, step === "frame_analytics" ? { frame_analytics_engine: frameEngine } : undefined)}
-                  disabled={!isStepEnabled(step) || isAnyStepRunning}
-                  className={`rounded px-3 py-1.5 text-sm ${
-                    !isStepEnabled(step) || isAnyStepRunning
-                      ? "cursor-not-allowed bg-gray-200 text-gray-500"
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {STEP_LABELS[step]}
-                </button>
-              ))}
-
-              {/* Frame engine selector */}
-              <div className="flex flex-col">
-                <select
-                  value={frameEngine}
-                  onChange={(e) => setFrameEngine(e.target.value)}
-                  className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
-                >
-                  {FRAME_ENGINE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <span className="mt-0.5 text-xs text-gray-400">VLM engine for frame analysis</span>
+      {/* Capabilities overview */}
+      <div className="border-b border-gray-100 bg-blue-50/50 px-4 py-2">
+        <button
+          onClick={() => setShowCapabilities(!showCapabilities)}
+          className="flex w-full items-center gap-1 text-left text-xs font-medium text-blue-700 hover:text-blue-900"
+        >
+          <svg
+            className={`h-3.5 w-3.5 transition-transform ${showCapabilities ? "rotate-90" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          {t("detail.whatsAvailable")}
+        </button>
+        {showCapabilities && (
+          <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-5">
+            {CAPABILITY_KEYS.map((cap) => (
+              <div key={cap.name} className="py-1">
+                <span className="text-xs font-semibold text-gray-700">{t(cap.name)}</span>
+                <p className="text-xs text-gray-500">{t(cap.desc)}</p>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-              {/* Divider */}
-              <div className="mx-1 h-6 w-px bg-gray-300" />
-
-              {/* Site Analytics button */}
+      {/* Analytics panel with tabs */}
+      {showAnalytics && (
+        <div className="border-b border-gray-200 bg-gray-50">
+          {/* Tab bar */}
+          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4">
+            <div className="flex">
               <button
-                onClick={handleRunSiteAnalytics}
-                title={STEP_TOOLTIPS["site_analytics"]}
-                disabled={isAnyStepRunning}
-                className={`rounded px-3 py-1.5 text-sm ${
-                  isAnyStepRunning
-                    ? "cursor-not-allowed bg-gray-200 text-gray-500"
-                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                onClick={() => setActiveTab("pipeline")}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "pipeline"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Site Analytics
+                {t("detail.pipeline")}
               </button>
-
-              {/* Site engine selector */}
-              <div className="flex flex-col">
-                <select
-                  value={siteEngine}
-                  onChange={(e) => setSiteEngine(e.target.value)}
-                  className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
-                >
-                  {SITE_ENGINE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <span className="mt-0.5 text-xs text-gray-400">Detection engine for site analytics</span>
-              </div>
-
-              {/* Language toggle */}
-              <div className="flex flex-col">
-                <div
-                  className="inline-flex rounded border border-gray-300 text-sm"
-                  title="Analysis and prompt language"
-                >
-                  <button
-                    onClick={() => setSiteLanguage("en")}
-                    className={`px-2 py-1 ${siteLanguage === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    EN
-                  </button>
-                  <button
-                    onClick={() => setSiteLanguage("fr")}
-                    className={`px-2 py-1 ${siteLanguage === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    FR
-                  </button>
-                </div>
-                <span className="mt-0.5 text-xs text-gray-400">Analysis language</span>
-              </div>
-
-              {/* View Site Analytics button (when completed) */}
-              {isSiteAnalyticsCompleted && (
+              <button
+                onClick={() => setActiveTab("site_analytics")}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "site_analytics"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {t("detail.siteAnalytics")}
+              </button>
+            </div>
+            {/* Language toggle — shared across both tabs */}
+            <div className="flex items-center gap-1.5 pb-1">
+              <span className="text-xs text-gray-400">{t("detail.language")}</span>
+              <div
+                className="inline-flex rounded border border-gray-300 text-sm"
+                title="Analysis and prompt language"
+              >
                 <button
-                  onClick={() => setShowSiteAnalytics(true)}
-                  className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                  onClick={() => setLang("en")}
+                  className={`px-2 py-1 ${lang === "en" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
-                  View Site Analytics
+                  EN
                 </button>
+                <button
+                  onClick={() => setLang("fr")}
+                  className={`px-2 py-1 ${lang === "fr" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  FR
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4">
+            <div className="mx-auto max-w-4xl">
+              {/* Event Pipeline tab */}
+              {activeTab === "pipeline" && (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    {EVENT_STEP_ORDER.map((step) => (
+                      <button
+                        key={step}
+                        title={t(`tooltip.${step}` as Parameters<typeof t>[0])}
+                        onClick={() => handleRunStep(step, {
+                          ...(step === "frame_analytics" ? { frame_analytics_engine: frameEngine } : {}),
+                          language: lang,
+                        })}
+                        disabled={!isStepEnabled(step) || isAnyStepRunning}
+                        className={`rounded px-3 py-1.5 text-sm ${
+                          !isStepEnabled(step) || isAnyStepRunning
+                            ? "cursor-not-allowed bg-gray-200 text-gray-500"
+                            : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {t(`step.${step}` as Parameters<typeof t>[0])}
+                      </button>
+                    ))}
+
+                    {/* Frame engine selector */}
+                    <div className="flex flex-col">
+                      <select
+                        value={frameEngine}
+                        onChange={(e) => setFrameEngine(e.target.value)}
+                        className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+                      >
+                        {FRAME_ENGINE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <span className="mt-0.5 text-xs text-gray-400">{t("detail.vlmEngine")}</span>
+                    </div>
+
+                    <div className="mx-1 h-6 w-px bg-gray-300" />
+
+                    {/* Run All / Cancel */}
+                    {isAnyStepRunning ? (
+                      <button
+                        onClick={handleCancelPipeline}
+                        className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                      >
+                        {t("detail.cancelPipeline")}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleStartPipeline}
+                        title="Run transcribe, extract events, extract frames, and frame analytics in sequence"
+                        className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        {t("detail.runAll")}
+                      </button>
+                    )}
+                  </div>
+                  {actionError && (
+                    <div className="mb-4 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                      {actionError}
+                    </div>
+                  )}
+                  <PipelineStatus
+                    runId={run_id}
+                    onComplete={handlePipelineComplete}
+                    onStatusUpdate={handlePipelineStatusUpdate}
+                    filterSteps={EVENT_STEP_ORDER}
+                  />
+                </>
+              )}
+
+              {/* Site Analytics tab */}
+              {activeTab === "site_analytics" && (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleRunSiteAnalytics}
+                      title={t("tooltip.site_analytics")}
+                      disabled={isAnyStepRunning}
+                      className={`rounded px-3 py-1.5 text-sm ${
+                        isAnyStepRunning
+                          ? "cursor-not-allowed bg-gray-200 text-gray-500"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {t("detail.runSiteAnalytics")}
+                    </button>
+
+                    {/* Site engine selector */}
+                    <div className="flex flex-col">
+                      <select
+                        value={siteEngine}
+                        onChange={(e) => setSiteEngine(e.target.value)}
+                        className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+                      >
+                        {SITE_ENGINE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <span className="mt-0.5 text-xs text-gray-400">{t("detail.detectionEngine")}</span>
+                    </div>
+
+                    {/* View Site Analytics button (when completed) */}
+                    {(isSiteAnalyticsCompleted || hasSiteAnalyticsArtifact) && (
+                      <button
+                        onClick={() => setShowSiteAnalytics(true)}
+                        className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        {t("detail.viewSiteAnalytics")}
+                      </button>
+                    )}
+                  </div>
+                  {actionError && (
+                    <div className="mb-4 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                      {actionError}
+                    </div>
+                  )}
+                  <PipelineStatus
+                    runId={run_id}
+                    onComplete={handlePipelineComplete}
+                    onStatusUpdate={handlePipelineStatusUpdate}
+                    filterSteps={["site_analytics"]}
+                  />
+                </>
               )}
             </div>
-            {actionError && (
-              <div className="mb-4 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-                {actionError}
-              </div>
-            )}
-            <PipelineStatus
-              runId={run_id}
-              onComplete={handlePipelineComplete}
-              onStatusUpdate={handlePipelineStatusUpdate}
-            />
           </div>
         </div>
       )}
@@ -453,7 +525,7 @@ export default function RunDetailPage({ params }: PageProps) {
         <div className="flex min-h-0 flex-1 flex-col border-l border-gray-200 bg-gray-50 lg:w-1/3">
           <div className="border-b border-gray-200 bg-white px-4 py-3">
             <h2 className="font-medium text-gray-900">
-              Events ({events.length})
+              {t("detail.events")} ({events.length})
             </h2>
           </div>
           <div className="flex-1 overflow-hidden">
@@ -513,7 +585,7 @@ export default function RunDetailPage({ params }: PageProps) {
           <div className="h-[95vh] w-[98vw] max-w-7xl overflow-hidden rounded-lg sm:h-[90vh] sm:w-[95vw]">
             <SiteAnalyticsViewer
               runId={run_id}
-              language={siteLanguage}
+              language={lang}
               onClose={() => setShowSiteAnalytics(false)}
             />
           </div>

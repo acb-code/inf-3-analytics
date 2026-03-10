@@ -93,9 +93,9 @@ Examples:
     parser.add_argument(
         "--engine",
         type=str,
-        default="gemini",
+        default="openai",
         choices=["yolo", "gemini", "openai"],
-        help="Detection engine: yolo (local YOLO-World), gemini (Gemini VLM), openai (OpenAI VLM) (default: gemini)",
+        help="Detection engine: yolo (local YOLO-World), gemini (Gemini VLM), openai (OpenAI VLM) (default: openai)",
     )
 
     parser.add_argument(
