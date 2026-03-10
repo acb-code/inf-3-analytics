@@ -51,16 +51,17 @@ export default function RunsPage() {
     );
   }
 
-  const handleDeleteRun = async (run: RunMetadata) => {
+  const handleDeleteRun = async (run: RunMetadata, force = false) => {
     setActionError(null);
-    const confirmed = window.confirm(
-      `Delete run ${run.run_id}? This only removes it from the registry.`
-    );
+    const confirmMsg = force
+      ? t("common.forceDeleteConfirm")
+      : `Delete run ${run.run_id}? This only removes it from the registry.`;
+    const confirmed = window.confirm(confirmMsg);
     if (!confirmed) return;
 
     setDeletingRunId(run.run_id);
     try {
-      await api.deleteRun(run.run_id);
+      await api.deleteRun(run.run_id, force);
       setRuns((prev) => prev.filter((item) => item.run_id !== run.run_id));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to delete run");

@@ -131,6 +131,11 @@ const translations = {
     "status.failed": "failed",
     "common.delete": "Delete",
     "common.deleting": "Deleting...",
+    "common.forceDeleteConfirm": "This run appears to be still running. Force delete anyway? This will not stop the pipeline if it is active.",
+
+    // Events
+    "events.addManualEvent": "Add Manual Event",
+    "events.noEvents": "No events found",
 
     // Frame viewer
     "viewer.eventSummary": "Event Summary",
@@ -287,6 +292,11 @@ const translations = {
     "status.failed": "échoué",
     "common.delete": "Supprimer",
     "common.deleting": "Suppression...",
+    "common.forceDeleteConfirm": "Cette inspection semble encore en cours. Forcer la suppression ? Cela n'arrêtera pas le pipeline s'il est actif.",
+
+    // Events
+    "events.addManualEvent": "Ajouter un événement manuel",
+    "events.noEvents": "Aucun événement trouvé",
 
     // Frame viewer
     "viewer.eventSummary": "Résumé de l'événement",

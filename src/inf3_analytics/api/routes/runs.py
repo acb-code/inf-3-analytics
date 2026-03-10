@@ -151,9 +151,10 @@ def get_run(
 def delete_run(
     run: Annotated[RunMetadata, Depends(get_run_or_404)],
     registry: Annotated[RunRegistry, Depends(get_registry)],
+    force: bool = False,
 ) -> dict[str, str]:
     """Delete a run from the registry."""
-    if run.status == RunStatus.RUNNING:
+    if run.status == RunStatus.RUNNING and not force:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete a running pipeline",

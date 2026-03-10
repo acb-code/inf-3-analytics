@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation";
 import type { RunMetadata } from "@/types/api";
 import { formatDate } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
+import { LoadingIndicator } from "@/components/LoadingSpinner";
 
 interface RunCardProps {
   run: RunMetadata;
-  onDelete?: (run: RunMetadata) => void;
+  onDelete?: (run: RunMetadata, force?: boolean) => void;
   deleting?: boolean;
 }
 
@@ -55,15 +56,16 @@ export function RunCard({ run, onDelete, deleting = false }: RunCardProps) {
         </h3>
         <div className="flex items-center gap-2">
           <StatusBadge status={run.status} />
+          {run.status === "running" && <LoadingIndicator className="text-blue-600" />}
           {onDelete && (
             <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onDelete(run);
+                onDelete(run, run.status === "running");
               }}
-              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
-              disabled={deleting || run.status === "running"}
+              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+              disabled={deleting}
             >
               {deleting ? t("common.deleting") : t("common.delete")}
             </button>

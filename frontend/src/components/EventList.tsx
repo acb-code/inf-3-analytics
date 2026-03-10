@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import type { Event, EventFrameSet } from "@/types/api";
 import { EventCard } from "./EventCard";
+import { useLanguage } from "@/lib/i18n";
 
 interface EventListProps {
   events: Event[];
@@ -33,6 +34,7 @@ export function EventList({
   onAnalyzeEvent,
   onUpdateSeverity,
 }: EventListProps) {
+  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
 
@@ -96,12 +98,12 @@ export function EventList({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Add Event
+              {t("events.addManualEvent")}
             </button>
           </div>
         )}
         <div className="flex flex-1 items-center justify-center text-gray-500">
-          No events found
+          {t("events.noEvents")}
         </div>
       </div>
     );
@@ -118,7 +120,7 @@ export function EventList({
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Event
+            {t("events.addManualEvent")}
           </button>
         )}
         {events.map((event) => {

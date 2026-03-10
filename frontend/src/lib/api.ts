@@ -214,8 +214,9 @@ export const api = {
     return res.json();
   },
 
-  deleteRun: async (runId: string): Promise<DeleteRunResponse> => {
-    const res = await fetch(`${API_BASE}/runs/${runId}`, {
+  deleteRun: async (runId: string, force = false): Promise<DeleteRunResponse> => {
+    const url = force ? `${API_BASE}/runs/${runId}?force=true` : `${API_BASE}/runs/${runId}`;
+    const res = await fetch(url, {
       method: "DELETE",
     });
     if (!res.ok) {
