@@ -11,7 +11,9 @@ from inf3_analytics.frame_extraction import (
     extract_event_frames,
 )
 from inf3_analytics.io.event_writer import read_json as read_events_json
+from inf3_analytics.io.frame_manifest_writer import read_manifest, write_manifest
 from inf3_analytics.types.event import Event
+from inf3_analytics.types.frame import FrameManifest
 
 
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
@@ -105,6 +107,13 @@ Examples:
         help="JPEG quality (1-31, lower is better, default: 2)",
     )
 
+    parser.add_argument(
+        "--event-id",
+        type=str,
+        default=None,
+        help="If set, only extract frames for the event with this ID",
+    )
+
     return parser.parse_args(args)
 
 
@@ -134,11 +143,22 @@ def main(args: list[str] | None = None) -> int:
     print(f"Loading events: {events_path}")
     try:
         event_list = read_events_json(events_path)
-        events: tuple[Event, ...] = event_list.events
-        print(f"Loaded {len(events)} events")
+        all_events: tuple[Event, ...] = event_list.events
+        print(f"Loaded {len(all_events)} events")
     except Exception as e:
         print(f"Error loading events: {e}", file=sys.stderr)
         return 1
+
+    # Filter to a single event if --event-id was specified
+    event_id_filter: str | None = parsed.event_id
+    if event_id_filter:
+        events: tuple[Event, ...] = tuple(e for e in all_events if e.event_id == event_id_filter)
+        if not events:
+            print(f"Error: No event found with event_id={event_id_filter!r}", file=sys.stderr)
+            return 1
+        print(f"Filtering to event: {event_id_filter}")
+    else:
+        events = all_events
 
     if not events:
         print("No events to process")
@@ -180,6 +200,32 @@ def main(args: list[str] | None = None) -> int:
     except Exception as e:
         print(f"Error during extraction: {e}", file=sys.stderr)
         return 1
+
+    # If filtering to a single event, merge the new frame set into the existing manifest
+    if event_id_filter:
+        manifest_path = output_dir / "manifest.json"
+        if manifest_path.exists():
+            try:
+                existing = read_manifest(manifest_path)
+                # Replace or append this event's frame set
+                new_sets = [fs for fs in existing.event_frame_sets if fs.event_id != event_id_filter]
+                new_sets.extend(manifest.event_frame_sets)
+                merged = FrameManifest(
+                    event_frame_sets=tuple(new_sets),
+                    metadata=manifest.metadata,
+                    total_frames=sum(len(fs.frames) for fs in new_sets),
+                    total_events=len(new_sets),
+                    successful_events=sum(
+                        1 for fs in new_sets if fs.status.value in ("success", "partial")
+                    ),
+                    skipped_events=sum(1 for fs in new_sets if fs.status.value == "skipped"),
+                    failed_events=sum(1 for fs in new_sets if fs.status.value == "failed"),
+                )
+                write_manifest(merged, manifest_path)
+                manifest = merged
+                print(f"Merged into existing manifest ({len(new_sets)} total events)")
+            except Exception as e:
+                print(f"Warning: Could not merge manifest: {e}", file=sys.stderr)
 
     # Print summary
     print()

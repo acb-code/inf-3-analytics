@@ -136,6 +136,7 @@ const translations = {
     // Events
     "events.addManualEvent": "Add Manual Event",
     "events.noEvents": "No events found",
+    "events.extractFrames": "Extract Frames",
 
     // Frame viewer
     "viewer.eventSummary": "Event Summary",
@@ -297,6 +298,7 @@ const translations = {
     // Events
     "events.addManualEvent": "Ajouter un événement manuel",
     "events.noEvents": "Aucun événement trouvé",
+    "events.extractFrames": "Extraire les cadres",
 
     // Frame viewer
     "viewer.eventSummary": "Résumé de l'événement",

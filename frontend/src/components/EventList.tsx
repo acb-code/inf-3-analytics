@@ -11,12 +11,14 @@ interface EventListProps {
   eventFrameSets?: EventFrameSet[];
   commentCounts?: Record<string, number>;
   analyzingEventId?: string | null;
+  extractingEventId?: string | null;
   onEventClick: (event: Event) => void;
   onViewFrames?: (event: Event, frameSet: EventFrameSet) => void;
   onAddEvent?: () => void;
   onDeleteEvent?: (event: Event) => void;
   onViewComments?: (event: Event) => void;
   onAnalyzeEvent?: (event: Event) => void;
+  onExtractFrames?: (event: Event) => void;
   onUpdateSeverity?: (event: Event, severity: string | null) => void;
 }
 
@@ -26,12 +28,14 @@ export function EventList({
   eventFrameSets,
   commentCounts,
   analyzingEventId,
+  extractingEventId,
   onEventClick,
   onViewFrames,
   onAddEvent,
   onDeleteEvent,
   onViewComments,
   onAnalyzeEvent,
+  onExtractFrames,
   onUpdateSeverity,
 }: EventListProps) {
   const { t } = useLanguage();
@@ -134,6 +138,7 @@ export function EventList({
                 hasFrames={!!frameSet && frameSet.frames.length > 0}
                 commentCount={commentCounts?.[event.event_id]}
                 isAnalyzing={analyzingEventId === event.event_id}
+                isExtracting={extractingEventId === event.event_id}
                 onClick={() => onEventClick(event)}
                 onViewFrames={
                   frameSet && onViewFrames
@@ -143,6 +148,7 @@ export function EventList({
                 onDelete={onDeleteEvent ? () => onDeleteEvent(event) : undefined}
                 onViewComments={onViewComments ? () => onViewComments(event) : undefined}
                 onAnalyzeEvent={onAnalyzeEvent ? () => onAnalyzeEvent(event) : undefined}
+                onExtractFrames={onExtractFrames ? () => onExtractFrames(event) : undefined}
                 onUpdateSeverity={onUpdateSeverity ? (sev) => onUpdateSeverity(event, sev) : undefined}
               />
             </div>

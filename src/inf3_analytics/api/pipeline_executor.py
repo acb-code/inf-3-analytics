@@ -377,6 +377,7 @@ def run_frame_extraction(
     on_output: Callable[[str], None] | None = None,
     run_id: str | None = None,
     registry: "RunRegistry | None" = None,
+    event_id: str | None = None,
 ) -> tuple[bool, str]:
     """Run the frame extraction step.
 
@@ -387,6 +388,7 @@ def run_frame_extraction(
         on_output: Optional callback for streaming output
         run_id: Optional run ID for process tracking
         registry: Optional registry for PID tracking
+        event_id: Optional event ID to filter extraction to a single event
 
     Returns:
         Tuple of (success, message)
@@ -405,6 +407,8 @@ def run_frame_extraction(
         "--out",
         str(frames_dir),
     ]
+    if event_id:
+        args.extend(["--event-id", event_id])
     cmd = _build_uv_command("inf3_analytics.cli.extract_event_frames", args, [])
     return _run_subprocess(
         cmd, on_output=on_output, run_id=run_id, registry=registry, step=PipelineStep.EXTRACT_FRAMES
@@ -681,7 +685,8 @@ def execute_pipeline(
             )
         elif step == PipelineStep.EXTRACT_FRAMES:
             success, message = run_frame_extraction(
-                video_path_obj, run_root_obj, video_basename, on_output, run_id, registry
+                video_path_obj, run_root_obj, video_basename, on_output, run_id, registry,
+                event_id=request.event_id or None,
             )
         elif step == PipelineStep.FRAME_ANALYTICS:
             success, message = run_frame_analytics(
@@ -776,7 +781,8 @@ def execute_single_step(
         )
     elif step == PipelineStep.EXTRACT_FRAMES:
         success, message = run_frame_extraction(
-            video_path_obj, run_root_obj, video_basename, on_output, run_id, registry
+            video_path_obj, run_root_obj, video_basename, on_output, run_id, registry,
+            event_id=request.event_id or None,
         )
     elif step == PipelineStep.FRAME_ANALYTICS:
         success, message = run_frame_analytics(

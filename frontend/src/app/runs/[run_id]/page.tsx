@@ -78,6 +78,7 @@ export default function RunDetailPage({ params }: PageProps) {
   const [siteEngine, setSiteEngine] = useState("openai");
   const [frameEngine, setFrameEngine] = useState("openai");
   const [analyzingEventId, setAnalyzingEventId] = useState<string | null>(null);
+  const [extractingEventId, setExtractingEventId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -188,6 +189,23 @@ export default function RunDetailPage({ params }: PageProps) {
       setActionError((err as Error).message);
     } finally {
       setAnalyzingEventId(null);
+    }
+  };
+
+  const handleExtractFrames = async (event: Event) => {
+    setActionError(null);
+    setExtractingEventId(event.event_id);
+    try {
+      await api.runPipelineStep(run_id, "extract_frames", {
+        event_id: event.event_id,
+      });
+      // Re-fetch frames manifest to reflect the newly extracted frames
+      const framesManifest = await api.getEventFramesManifest(run_id).catch(() => ({ event_frame_sets: [] }));
+      setEventFrameSets(framesManifest.event_frame_sets || []);
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setExtractingEventId(null);
     }
   };
 
@@ -546,12 +564,14 @@ export default function RunDetailPage({ params }: PageProps) {
               eventFrameSets={eventFrameSets}
               commentCounts={commentCounts}
               analyzingEventId={analyzingEventId}
+              extractingEventId={extractingEventId}
               onEventClick={handleEventClick}
               onViewFrames={handleViewFrames}
               onAddEvent={handleAddEvent}
               onDeleteEvent={handleDeleteEvent}
               onViewComments={handleViewComments}
               onAnalyzeEvent={handleAnalyzeEvent}
+              onExtractFrames={handleExtractFrames}
               onUpdateSeverity={handleUpdateEventSeverity}
             />
           </div>
