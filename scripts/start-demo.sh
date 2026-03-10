@@ -110,6 +110,7 @@ cleanup() {
   [[ -n "${API_PID:-}" ]] && kill "$API_PID" >/dev/null 2>&1 || true
   [[ -n "${FRONTEND_PID:-}" ]] && kill "$FRONTEND_PID" >/dev/null 2>&1 || true
   [[ -n "${CADDY_PID:-}" ]] && kill "$CADDY_PID" >/dev/null 2>&1 || true
+  [[ -n "${TUNNEL_PID:-}" ]] && kill "$TUNNEL_PID" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -151,6 +152,46 @@ if [[ "$NO_TUNNEL" == "1" ]]; then
   while true; do sleep 60; done
 else
   echo "Starting Cloudflare quick tunnel..."
+  cloudflared tunnel --url "http://127.0.0.1:${INF3_CADDY_PORT}" \
+    >"$INF3_DATA_ROOT/logs/cloudflared.log" 2>&1 &
+  TUNNEL_PID=$!
+
+  # Wait for the tunnel URL to appear in the log (up to 30s)
+  TUNNEL_URL=""
+  for i in {1..30}; do
+    TUNNEL_URL=$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' \
+      "$INF3_DATA_ROOT/logs/cloudflared.log" 2>/dev/null | head -1 || true)
+    [[ -n "$TUNNEL_URL" ]] && break
+    sleep 1
+  done
+
+  if [[ -z "$TUNNEL_URL" ]]; then
+    echo "Cloudflare tunnel failed to start. Log:"
+    cat "$INF3_DATA_ROOT/logs/cloudflared.log"
+    exit 1
+  fi
+
+  # Wait for DNS to resolve (up to 60s)
+  TUNNEL_HOST="${TUNNEL_URL#https://}"
+  echo "Tunnel URL: $TUNNEL_URL"
+  echo "Waiting for DNS to propagate..."
+  DNS_READY=0
+  for i in {1..60}; do
+    if dig +short "$TUNNEL_HOST" @1.1.1.1 2>/dev/null | grep -q .; then
+      DNS_READY=1
+      break
+    fi
+    sleep 1
+  done
+
+  echo ""
+  if [[ "$DNS_READY" == "1" ]]; then
+    echo "DNS resolved! Demo is ready:"
+  else
+    echo "DNS did not resolve within 60s (tunnel may still work — try the URL):"
+  fi
+  echo "  $TUNNEL_URL  (basic auth: ${BASIC_AUTH_USER} / <your password>)"
+  echo ""
   echo "Press Ctrl+C to stop everything."
-  cloudflared tunnel --url "http://127.0.0.1:${INF3_CADDY_PORT}"
+  wait "$TUNNEL_PID"
 fi
