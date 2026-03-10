@@ -15,6 +15,7 @@ import type {
   EventSummary,
 } from "@/types/api";
 import { formatTime, getSeverityColor } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 import { BoundingBoxOverlay } from "./BoundingBoxOverlay";
 import { DetectionToggleList } from "./DetectionToggleList";
 
@@ -35,6 +36,7 @@ export function EventFrameViewer({
   eventFrameSet,
   onClose,
 }: EventFrameViewerProps) {
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [frameAnalyses, setFrameAnalyses] = useState<FrameAnalysis[]>([]);
   const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
@@ -211,7 +213,7 @@ export function EventFrameViewer({
   const frameHeight = currentFrame.height || naturalSize?.height || 0;
   const zoomedWidth = frameWidth > 0 ? Math.round(frameWidth * zoom) : undefined;
   const zoomedHeight = frameHeight > 0 ? Math.round(frameHeight * zoom) : undefined;
-  const zoomLabel = viewerMode === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`;
+  const zoomLabel = viewerMode === "fit" ? t("viewer.fit") : `${Math.round(zoom * 100)}%`;
 
   return (
     <div className="flex h-full flex-col bg-gray-900">
@@ -228,7 +230,7 @@ export function EventFrameViewer({
         <button
           onClick={onClose}
           className="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
-          title="Close (Esc)"
+          title={t("viewer.close")}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -294,7 +296,7 @@ export function EventFrameViewer({
               onClick={goToPrev}
               disabled={currentIndex === 0}
               className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 disabled:opacity-30"
-              title="Previous (Left Arrow)"
+              title={t("viewer.previous")}
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -304,7 +306,7 @@ export function EventFrameViewer({
               onClick={goToNext}
               disabled={currentIndex === eventFrameSet.frames.length - 1}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 disabled:opacity-30"
-              title="Next (Right Arrow)"
+              title={t("viewer.next")}
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -341,7 +343,7 @@ export function EventFrameViewer({
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-700 bg-gray-800 px-4 py-1 text-xs text-gray-300">
             <div className="flex items-center gap-3">
               <span>
-                Frame {currentIndex + 1} of {eventFrameSet.frames.length}
+                {t("viewer.frameOf")} {currentIndex + 1} {t("viewer.of")} {eventFrameSet.frames.length}
               </span>
               <span className="font-mono">{formatTime(currentFrame.timestamp_s)}</span>
             </div>
@@ -353,9 +355,9 @@ export function EventFrameViewer({
                     ? "bg-blue-600 text-white"
                     : "bg-gray-700 text-gray-200 hover:bg-gray-600"
                 }`}
-                title="Fit image to viewport (F)"
+                title={t("viewer.fitToViewport")}
               >
-                Fit
+                {t("viewer.fit")}
               </button>
               <button
                 onClick={setActualSize}
@@ -364,14 +366,14 @@ export function EventFrameViewer({
                     ? "bg-blue-600 text-white"
                     : "bg-gray-700 text-gray-200 hover:bg-gray-600"
                 }`}
-                title="Reset to 100% (0)"
+                title={t("viewer.resetZoom")}
               >
                 100%
               </button>
               <button
                 onClick={zoomOut}
                 className="rounded bg-gray-700 px-2 py-1 text-xs font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
-                title="Zoom out (-)"
+                title={t("viewer.zoomOut")}
                 disabled={viewerMode === "zoom" && zoom <= MIN_ZOOM}
               >
                 -
@@ -382,7 +384,7 @@ export function EventFrameViewer({
               <button
                 onClick={zoomIn}
                 className="rounded bg-gray-700 px-2 py-1 text-xs font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
-                title="Zoom in (+)"
+                title={t("viewer.zoomIn")}
                 disabled={viewerMode === "zoom" && zoom >= MAX_ZOOM}
               >
                 +
@@ -402,7 +404,7 @@ export function EventFrameViewer({
             {eventSummary && eventSummary.top_findings.length > 0 && (
               <div className="mb-4 rounded-lg border border-gray-600 bg-gray-750 p-3">
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">
-                  Event Summary
+                  {t("viewer.eventSummary")}
                 </h4>
                 <div className="space-y-1.5">
                   {eventSummary.top_findings.map((finding, idx) => (
@@ -434,7 +436,7 @@ export function EventFrameViewer({
               </div>
             )}
 
-            <h4 className="mb-3 text-sm font-medium text-white">Frame Analysis</h4>
+            <h4 className="mb-3 text-sm font-medium text-white">{t("viewer.frameAnalysis")}</h4>
 
             {loading ? (
               <div className="flex items-center justify-center py-8">
@@ -450,7 +452,7 @@ export function EventFrameViewer({
                 {currentAnalysis.scene_summary && (
                   <div>
                     <h5 className="mb-1 text-xs font-medium uppercase text-gray-400">
-                      Scene Summary
+                      {t("viewer.sceneSummary")}
                     </h5>
                     <p className="text-sm text-gray-200">
                       {currentAnalysis.scene_summary}
@@ -473,7 +475,7 @@ export function EventFrameViewer({
                 {currentAnalysis.qa && currentAnalysis.qa.length > 0 && (
                   <div>
                     <h5 className="mb-2 text-xs font-medium uppercase text-gray-400">
-                      Q&A
+                      {t("viewer.qa")}
                     </h5>
                     <div className="space-y-2">
                       {currentAnalysis.qa.map((qa, idx) => (
@@ -488,12 +490,12 @@ export function EventFrameViewer({
 
                 {/* Model info */}
                 <div className="border-t border-gray-700 pt-3 text-xs text-gray-500">
-                  <p>Model: {currentAnalysis.engine.model}</p>
-                  <p>Provider: {currentAnalysis.engine.provider}</p>
+                  <p>{t("viewer.model")}: {currentAnalysis.engine.model}</p>
+                  <p>{t("viewer.provider")}: {currentAnalysis.engine.provider}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-400">No analysis available for this frame</p>
+              <p className="text-sm text-gray-400">{t("viewer.noAnalysis")}</p>
             )}
           </div>
         </div>

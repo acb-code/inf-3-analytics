@@ -1,6 +1,7 @@
 "use client";
 
 import type { Detection } from "@/types/api";
+import { useLanguage } from "@/lib/i18n";
 
 const TYPE_COLORS: Record<string, string> = {
   construction_equipment: "bg-blue-500",
@@ -31,6 +32,8 @@ export function DetectionToggleList({
   onShowAll,
   onHideAll,
 }: DetectionToggleListProps) {
+  const { t } = useLanguage();
+
   if (detections.length === 0) return null;
 
   // Group by type
@@ -45,20 +48,20 @@ export function DetectionToggleList({
     <div>
       <div className="mb-2 flex items-center gap-2">
         <h5 className="text-xs font-medium uppercase text-gray-400">
-          Detections ({detections.length})
+          {t("viewer.detections")} ({detections.length})
         </h5>
         <div className="ml-auto flex gap-1">
           <button
             onClick={onShowAll}
             className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-600"
           >
-            All
+            {t("viewer.all")}
           </button>
           <button
             onClick={onHideAll}
             className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-600"
           >
-            None
+            {t("viewer.none")}
           </button>
         </div>
       </div>
