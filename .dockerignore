@@ -1,0 +1,15 @@
+.git
+.venv
+__pycache__
+node_modules
+frontend/
+demo_data/
+outputs/
+uploads/
+data/
+.inf3-analytics/
+*.egg-info
+.mypy_cache
+.pytest_cache
+.ruff_cache
+*.pt

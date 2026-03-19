@@ -108,6 +108,7 @@ CADDYEOF
 cleanup() {
   echo "Stopping demo processes..."
   [[ -n "${API_PID:-}" ]] && kill "$API_PID" >/dev/null 2>&1 || true
+  [[ -n "${WORKER_PID:-}" ]] && kill "$WORKER_PID" >/dev/null 2>&1 || true
   [[ -n "${FRONTEND_PID:-}" ]] && kill "$FRONTEND_PID" >/dev/null 2>&1 || true
   [[ -n "${CADDY_PID:-}" ]] && kill "$CADDY_PID" >/dev/null 2>&1 || true
   [[ -n "${TUNNEL_PID:-}" ]] && kill "$TUNNEL_PID" >/dev/null 2>&1 || true
@@ -124,6 +125,15 @@ echo "Starting API..."
 ) >"$INF3_DATA_ROOT/logs/api.log" 2>&1 &
 API_PID=$!
 wait_for_port "$INF3_API_PORT" "API" "$INF3_DATA_ROOT/logs/api.log"
+
+echo "Starting worker..."
+(
+  cd "$INF3_DATA_ROOT"
+  INF3_DATA_ROOT="$INF3_DATA_ROOT" \
+  INF3_REGISTRY_PATH="$INF3_REGISTRY_PATH" \
+  uv run --extra cloud --extra api inf3-worker
+) >"$INF3_DATA_ROOT/logs/worker.log" 2>&1 &
+WORKER_PID=$!
 
 echo "Starting frontend..."
 (

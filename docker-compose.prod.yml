@@ -1,0 +1,57 @@
+services:
+  inf3-api:
+    build: .
+    env_file: .env
+    environment:
+      INF3_DATA_ROOT: /data
+      INF3_REGISTRY_PATH: /data/.inf3-analytics/registry.json
+      INF3_UPLOADS_DIR: /data/uploads
+      INF3_OUTPUTS_DIR: /data/outputs
+      INF3_CORS_ORIGINS: '["https://inspect.lakesideai.dev"]'
+    volumes:
+      - inf3-data:/data
+    working_dir: /data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - web
+      - internal
+
+  inf3-worker:
+    build: .
+    command: ["inf3-worker", "--poll-interval", "2"]
+    env_file: .env
+    environment:
+      INF3_DATA_ROOT: /data
+      INF3_REGISTRY_PATH: /data/.inf3-analytics/registry.json
+    volumes:
+      - inf3-data:/data
+    working_dir: /data
+    restart: unless-stopped
+    depends_on:
+      inf3-api:
+        condition: service_healthy
+    networks:
+      - internal
+
+  inf3-frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - inf3-api
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  inf3-data:

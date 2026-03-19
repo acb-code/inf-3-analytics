@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from inf3_analytics.api.config import get_settings
 from inf3_analytics.api.queue import TaskQueue
 from inf3_analytics.api.registry import RunRegistry
-from inf3_analytics.api.routes import artifacts, decomposition, events, pipeline, runs, upload, video
+from inf3_analytics.api.routes import artifacts, decomposition, events, health, pipeline, runs, upload, video
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
     )
 
     # Include routers
+    application.include_router(health.router)
     application.include_router(runs.router)
     application.include_router(artifacts.router)
     application.include_router(video.router)
