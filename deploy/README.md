@@ -48,12 +48,31 @@ $EDITOR .env
 
 The `.env` file only needs secrets and tuning knobs — data paths are set in `docker-compose.prod.yml` via the `environment` block.
 
-### 2. Add Caddyfile entry
+### 2. Set up Basic Auth
+
+Generate a bcrypt hash for your password:
+
+```bash
+docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_PASSWORD'
+```
+
+Add the hash to your `.env`:
+
+```
+BASIC_AUTH_USER=tester
+BASIC_AUTH_HASH=$2a$14$...the hash output...
+```
+
+### 3. Add Caddyfile entry
 
 Add this block to your VPS Caddyfile (wherever your Caddy compose manages it):
 
 ```caddyfile
 inspect.lakesideai.dev {
+  basic_auth {
+    {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+  }
+
   handle_path /api* {
     reverse_proxy inf3-api:8001 {
       flush_interval -1
@@ -67,32 +86,48 @@ inspect.lakesideai.dev {
 
 `flush_interval -1` disables response buffering, required for SSE streams from the API.
 
+Make sure the Caddy compose loads the `.env` file:
+
+```yaml
+env_file:
+  - ../inf3/inf-3-analytics/.env
+```
+
 Then reload Caddy:
 
 ```bash
 docker compose -f /path/to/caddy/docker-compose.yml restart caddy
 ```
 
-### 3. Build and start
+### 4. Build and start
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-### 4. Verify
+### 5. Verify
 
 ```bash
 # All 3 services running, API healthy
 docker compose -f docker-compose.prod.yml ps
 
-# Health check
-curl http://localhost:8001/health
+# Through Caddy (requires Basic Auth)
+curl -u tester https://inspect.lakesideai.dev/api/health
 # → {"status":"ok"}
 
-# Through Caddy (after DNS propagates)
-curl https://inspect.lakesideai.dev/api/health
-curl https://inspect.lakesideai.dev/api/runs
+curl -u tester https://inspect.lakesideai.dev/api/runs
+# → {"runs":[]}
+
+# Unauthenticated requests should get 401
+curl -s -o /dev/null -w "%{http_code}" https://inspect.lakesideai.dev/api/health
+# → 401
 ```
+
+Note: the API is not exposed to the host — it's only reachable through Caddy on the `web` Docker network.
+
+### 6. Connect
+
+Open https://inspect.lakesideai.dev in a browser. You'll be prompted for Basic Auth credentials (`tester` / your password). The frontend talks to the API at `/api`.
 
 ## Operations
 
@@ -104,6 +139,16 @@ docker compose -f docker-compose.prod.yml logs -f
 
 # Single service
 docker compose -f docker-compose.prod.yml logs -f inf3-worker
+```
+
+### Stop / tear down
+
+```bash
+# Stop all services (keeps volumes)
+docker compose -f docker-compose.prod.yml down
+
+# Stop and delete data volume too
+docker compose -f docker-compose.prod.yml down -v
 ```
 
 ### Redeploy after code changes
