@@ -9,7 +9,7 @@ services:
       INF3_OUTPUTS_DIR: /data/outputs
       INF3_CORS_ORIGINS: '["https://inspect.lakesideai.dev"]'
     volumes:
-      - inf3-data:/data
+      - ./data:/data
     working_dir: /data
     restart: unless-stopped
     healthcheck:
@@ -30,7 +30,7 @@ services:
       INF3_DATA_ROOT: /data
       INF3_REGISTRY_PATH: /data/.inf3-analytics/registry.json
     volumes:
-      - inf3-data:/data
+      - ./data:/data
     working_dir: /data
     restart: unless-stopped
     depends_on:
@@ -52,6 +52,3 @@ networks:
     external: true
   internal:
     driver: bridge
-
-volumes:
-  inf3-data:
