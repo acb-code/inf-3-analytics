@@ -1,5 +1,6 @@
 """Video upload endpoints."""
 
+import logging
 import re
 import uuid
 from datetime import UTC, datetime
@@ -12,6 +13,8 @@ from inf3_analytics.api.config import Settings, get_settings
 from inf3_analytics.api.dependencies import get_registry
 from inf3_analytics.api.models import UploadResponse
 from inf3_analytics.api.registry import RunRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -78,14 +81,7 @@ async def upload_video(
             detail=f"Invalid file type '{ext}'. Allowed: {settings.inf3_allowed_video_extensions}",
         )
 
-    # Check file size (read in chunks to avoid loading entire file into memory)
     max_size_bytes = settings.inf3_max_upload_size_mb * 1024 * 1024
-    content = await file.read()
-    if len(content) > max_size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Maximum size: {settings.inf3_max_upload_size_mb}MB",
-        )
 
     # Generate unique filename and paths
     unique_filename = _generate_unique_filename(file.filename)
@@ -110,14 +106,28 @@ async def upload_video(
     run_root = outputs_dir / run_id
     run_root.mkdir(parents=True, exist_ok=True)
 
-    # Save the uploaded file
+    # Stream upload to disk in chunks, checking size as we go
     try:
-        video_path.write_bytes(content)
-    except OSError as e:
+        total = 0
+        with open(video_path, "wb") as f:
+            while chunk := await file.read(8192):
+                total += len(chunk)
+                if total > max_size_bytes:
+                    video_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Maximum size: {settings.inf3_max_upload_size_mb}MB",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except OSError:
+        logger.exception("Failed to save uploaded video file")
+        video_path.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save video file: {e}",
-        ) from e
+            detail="Failed to save video file",
+        )
 
     # Create run in registry
     try:
@@ -129,13 +139,14 @@ async def upload_video(
         )
         # Initialize pipeline steps
         registry.init_pipeline_steps(run_id)
-    except Exception as e:
+    except Exception:
         # Clean up uploaded file on registry error
         video_path.unlink(missing_ok=True)
+        logger.exception("Failed to create run for %s", run_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create run: {e}",
-        ) from e
+            detail="Failed to create run",
+        )
 
     return UploadResponse(
         run_id=run_id,

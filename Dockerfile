@@ -15,9 +15,12 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd --system --no-create-home appuser
+
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/src /app/src
 ENV PATH="/app/.venv/bin:$PATH"
 
+USER appuser
 EXPOSE 8001
 CMD ["uvicorn", "inf3_analytics.api.app:app", "--host", "0.0.0.0", "--port", "8001"]

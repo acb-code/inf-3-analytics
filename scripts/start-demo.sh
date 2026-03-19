@@ -89,12 +89,19 @@ cat >"$CADDYFILE" <<CADDYEOF
 }
 
 :${INF3_CADDY_PORT} {
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Referrer-Policy strict-origin-when-cross-origin
+  }
+
   basicauth {
     ${BASIC_AUTH_USER} ${BASIC_AUTH_HASH}
   }
 
   handle_path /api* {
     reverse_proxy 127.0.0.1:${INF3_API_PORT} {
+      header_up X-API-Key ${INF3_API_KEY:-}
       flush_interval -1
     }
   }
@@ -121,6 +128,7 @@ echo "Starting API..."
   INF3_DATA_ROOT="$INF3_DATA_ROOT" \
   INF3_REGISTRY_PATH="$INF3_REGISTRY_PATH" \
   INF3_MAX_UPLOAD_SIZE_MB="$INF3_MAX_UPLOAD_SIZE_MB" \
+  INF3_API_KEY="${INF3_API_KEY:-}" \
   uv run --extra cloud --extra api uvicorn inf3_analytics.api.app:app --host 127.0.0.1 --port "$INF3_API_PORT"
 ) >"$INF3_DATA_ROOT/logs/api.log" 2>&1 &
 API_PID=$!

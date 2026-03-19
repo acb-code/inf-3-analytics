@@ -3,12 +3,20 @@
 }
 
 :8080 {
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Referrer-Policy strict-origin-when-cross-origin
+  }
+
   basicauth {
     {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
   }
 
   handle_path /api* {
-    reverse_proxy 127.0.0.1:8001
+    reverse_proxy 127.0.0.1:8001 {
+      header_up X-API-Key {$INF3_API_KEY}
+    }
   }
 
   handle {

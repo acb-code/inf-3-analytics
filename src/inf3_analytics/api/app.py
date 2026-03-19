@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from inf3_analytics.api.config import get_settings
+from inf3_analytics.api.middleware import APIKeyMiddleware
 from inf3_analytics.api.queue import TaskQueue
 from inf3_analytics.api.registry import RunRegistry
 from inf3_analytics.api.routes import artifacts, decomposition, events, health, pipeline, runs, upload, video
@@ -51,13 +52,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Defense-in-depth auth (active when INF3_API_KEY is set)
+    application.add_middleware(APIKeyMiddleware)
+
     # CORS middleware
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.inf3_cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-API-Key"],
     )
 
     # Include routers

@@ -63,18 +63,37 @@ BASIC_AUTH_USER=tester
 BASIC_AUTH_HASH=$2a$14$...the hash output...
 ```
 
-### 3. Add Caddyfile entry
+### 3. Set up API key (recommended)
+
+Generate a random API key and add it to your `.env`:
+
+```bash
+echo "INF3_API_KEY=$(openssl rand -hex 32)" >> .env
+```
+
+This adds defense-in-depth authentication at the app level. If Caddy's Basic Auth is ever bypassed or the API port is accidentally exposed, requests without a valid `X-API-Key` header will be rejected (except `/health`).
+
+When `INF3_API_KEY` is unset, the middleware is a no-op — the app works exactly as before with Caddy-only auth.
+
+### 4. Add Caddyfile entry
 
 Add this block to your VPS Caddyfile (wherever your Caddy compose manages it):
 
 ```caddyfile
 inspect.lakesideai.dev {
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Referrer-Policy strict-origin-when-cross-origin
+  }
+
   basic_auth {
     {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
   }
 
   handle_path /api* {
     reverse_proxy inf3-api:8001 {
+      header_up X-API-Key {$INF3_API_KEY}
       flush_interval -1
     }
   }
@@ -99,13 +118,23 @@ Then reload Caddy:
 docker compose -f /path/to/caddy/docker-compose.yml restart caddy
 ```
 
-### 4. Build and start
+### 5. Prepare data directory
+
+The containers run as a non-root user (`appuser`, UID 999). Ensure the data directory exists and is writable:
+
+```bash
+mkdir -p data
+# Match the UID of appuser created in the Dockerfile
+sudo chown -R 999:999 data
+```
+
+### 6. Build and start
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-### 5. Verify
+### 7. Verify
 
 ```bash
 # All 3 services running, API healthy
@@ -125,7 +154,7 @@ curl -s -o /dev/null -w "%{http_code}" https://inspect.lakesideai.dev/api/health
 
 Note: the API is not exposed to the host — it's only reachable through Caddy on the `web` Docker network.
 
-### 6. Connect
+### 8. Connect
 
 Open https://inspect.lakesideai.dev in a browser. You'll be prompted for Basic Auth credentials (`tester` / your password). The frontend talks to the API at `/api`.
 

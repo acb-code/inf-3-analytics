@@ -1,5 +1,6 @@
 """FastAPI dependencies for dependency injection."""
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -9,6 +10,8 @@ from fastapi import Depends, HTTPException, status
 from inf3_analytics.api.config import Settings, get_settings
 from inf3_analytics.api.models import RunMetadata
 from inf3_analytics.api.registry import RunRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -37,9 +40,10 @@ def validate_path_security(path: Path, settings: Settings) -> None:
         data_root = settings.inf3_data_root.resolve()
         resolved.relative_to(data_root)
     except ValueError as err:
+        logger.warning("Path traversal attempt blocked: %s", path)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Path {path} is outside allowed data root",
+            detail="Access denied: path is outside allowed data root",
         ) from err
 
 

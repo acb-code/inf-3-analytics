@@ -8,6 +8,7 @@ services:
       INF3_UPLOADS_DIR: /data/uploads
       INF3_OUTPUTS_DIR: /data/outputs
       INF3_CORS_ORIGINS: '["https://inspect.lakesideai.dev"]'
+      INF3_API_KEY: ${INF3_API_KEY:-}
     volumes:
       - ./data:/data
     working_dir: /data
