@@ -6,7 +6,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.6 /uv /uvx /usr/local/bin/
 # ── Build stage: install Python deps ────────────────────────────────
 FROM base AS build
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
 RUN uv sync --frozen --no-dev --extra cloud --extra api --extra cv
 
